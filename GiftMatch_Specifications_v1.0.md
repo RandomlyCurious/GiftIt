@@ -132,26 +132,39 @@ Le score de matching entre un produit et un proche est calculé par la **similar
 
 ## 4. Catalogue Produits
 
-### 4.1 Sources de données
-
-- **Phase 1 (MVP)** : catalogue éditorial curé manuellement (~200 à 500 produits), tagués et catégorisés
+### 4.1 Sour
+- **Phase 1 (MVP)** : catalogue éditorial curé manuellement (~200 à 500 pces de données
+roduits), tagués et catégorisés
 - **Phase 2** : intégration d'API partenaires (Amazon PA API, Cdiscount, Fnac…) pour catalogue dynamique
 
-### 4.2 Structure d'un produit
+## 4.2 Structure d'un produit
+
+### Table `produits` (catalogue générique)
 
 | Champ | Type | Description |
 |---|---|---|
 | id | UUID | Identifiant unique |
-| nom | Texte | Nom du produit |
+| nom | Texte | Nom générique du produit |
 | description | Texte long | Description courte (max 200 car.) |
-| tags | Array\<string\> | Liste de tags normalisés |
+| tags | Array<string> | Liste de tags normalisés |
 | categorie | Enum | High-tech, Loisirs, Mode, Gastronomie, Sport, Bien-être, Culture, Autre |
-| prix_min / prix_max | Float | Fourchette de prix en € |
-| url_produit | URL | Lien vers le site marchand |
-| url_image | URL | Image principale |
-| affilie | Boolean | Lien affilié disponible |
 | actif | Boolean | Visible dans le catalogue swipe |
 
+### Table `produit_vendeur` (occurrences marchandes) — v1.5
+
+| Champ | Type | Description |
+|---|---|---|
+| id | UUID | Identifiant unique |
+| produit_id | UUID | Référence vers `produits` |
+| vendeur | Texte | Nom du vendeur (Amazon, Fnac, Cdiscount…) |
+| url_produit | URL | Lien vers le site marchand |
+| url_image | URL | Image du produit chez ce vendeur |
+| prix_min / prix_max | Float | Fourchette de prix en € |
+| affilie | Boolean | Lien affilié disponible |
+| actif | Boolean | Disponible à la proposition |
+
+> 📌 MVP : `produit_vendeur` est simplifié dans la table `cadeaux` (un produit = un vendeur).
+> v1.5 : séparation effective lors du branchement des API marchandes (Amazon PA API, Fnac…).
 ### 4.3 Règles de gestion du catalogue
 
 - Un produit doit avoir au minimum 3 tags pour être intégré au swipe
