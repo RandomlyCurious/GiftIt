@@ -1,0 +1,237 @@
+{
+  "name": "GiftMatch — Rappel Noël",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "meta": {
+    "description": "SPÉCIALISATION du workflow générique `envoi-propositions.json` (cf. CLAUDE.md §8), restreinte au type 'noel'. Chaque matin à 8h00 : sélectionne les événements actifs de type 'noel', cible le 25 décembre, ne garde que J-30/J-14/J-7, appelle la Edge Function `matching`, envoie 5 propositions via Resend puis logue dans `propositions`. ATTENTION : si `envoi-propositions.json` (générique, tous types) est déjà actif, NE PAS activer ce workflow en plus, sous peine d'e-mails en double. Activer SOIT le générique, SOIT les spécialisations par type."
+  },
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 0 8 * * *"
+            }
+          ]
+        }
+      },
+      "id": "cron-8h",
+      "name": "Chaque matin 8h00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-160, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/evenements",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "select", "value": "id,type,date_fixe,actif,proche_id,proches(id,prenom,nom,date_naissance,user_id,profils(prenom,nom))" },
+            { "name": "actif", "value": "eq.true" },
+            { "name": "type", "value": "eq.noel" }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-evenements",
+      "name": "Supabase — événements Noël actifs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [60, 300]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "data",
+        "options": {}
+      },
+      "id": "split-evenements",
+      "name": "Éclater les événements",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [280, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// =========================================================================\n// Filtre J-30 / J-14 / J-7 pour NOËL (25 décembre).\n// Noël est commun à tous les proches : on calcule le prochain 25/12 (si déjà\n// passé cette année, l'année suivante) et on ne conserve que les événements\n// dont le nombre de jours restants vaut exactement 30, 14 ou 7.\n// =========================================================================\n\nconst SEUILS = [30, 14, 7];\nconst MS_PAR_JOUR = 1000 * 60 * 60 * 24;\n\nconst aujourdhui = new Date();\naujourdhui.setHours(0, 0, 0, 0);\n\n// Prochain 25 décembre.\nconst annee = aujourdhui.getFullYear();\nlet noel = new Date(annee, 11, 25);\nnoel.setHours(0, 0, 0, 0);\nif (noel < aujourdhui) noel = new Date(annee + 1, 11, 25);\n\nconst joursRestants = Math.round((noel - aujourdhui) / MS_PAR_JOUR);\n\n// Si on n'est pas à un seuil, aucun e-mail Noël à envoyer aujourd'hui :\n// on coupe court en ne renvoyant rien.\nif (!SEUILS.includes(joursRestants)) return [];\n\nconst dateNoel = noel.toISOString().slice(0, 10);\nconst sortie = [];\nfor (const item of $input.all()) {\n  sortie.push({\n    json: {\n      ...item.json,\n      jours_restants: joursRestants,\n      date_evenement: dateNoel,\n    },\n  });\n}\nreturn sortie;"
+      },
+      "id": "filtre-dates",
+      "name": "Filtre J-30 / J-14 / J-7",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/functions/v1/matching",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ proche_id: $json.proche_id, evenement_id: $json.id, nb_propositions: 5 }) }}",
+        "options": {}
+      },
+      "id": "appel-matching",
+      "name": "Edge Function matching",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [720, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/produits",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "select", "value": "id,nom,prix_min,prix_max,url_produit,url_image" },
+            { "name": "id", "value": "=in.({{ ($json.propositions || []).map(p => p.produit_id).join(',') }})" }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-produits",
+      "name": "Supabase — détails produits",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [940, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Assemble l'e-mail (template §9) + le payload de log à partir de\n// l'événement enrichi, des propositions scorées et des détails produits.\n// Type fixe ici : 'noel'.\n\nconst ev = $('Filtre J-30 / J-14 / J-7').item.json;\nconst propositions = $('Edge Function matching').item.json.propositions || [];\nconst produits = $input.item.json.data || $input.item.json || [];\n\nconst parId = {};\nfor (const p of produits) parId[p.id] = p;\n\nconst prenomUtilisateur = ev.proches?.profils?.prenom || '';\nconst prenomProche = ev.proches?.prenom || '';\nconst jours = ev.jours_restants;\n\nfunction formatPrix(p) {\n  const min = p.prix_min != null ? Math.round(p.prix_min) : null;\n  const max = p.prix_max != null ? Math.round(p.prix_max) : null;\n  if (min != null && max != null) return min === max ? `${min} €` : `${min}–${max} €`;\n  if (min != null) return `dès ${min} €`;\n  if (max != null) return `jusqu'à ${max} €`;\n  return '';\n}\n\nconst lignesHtml = [];\nconst lignesLog = [];\nfor (const prop of propositions.slice(0, 5)) {\n  const produit = parId[prop.produit_id];\n  if (!produit) continue;\n  const prix = formatPrix(produit);\n  lignesHtml.push(\n    `<li style=\"margin:8px 0\"><a href=\"${produit.url_produit}\">${produit.nom}</a>${prix ? ` — <strong>${prix}</strong>` : ''}</li>`\n  );\n  lignesLog.push({ proche_id: ev.proche_id, evenement_id: ev.id, produit_id: prop.produit_id, score: prop.score });\n}\n\nconst lienApp = $env.APP_URL || 'https://giftmatch.app';\nconst sujet = `🎁 Idées cadeaux pour ${prenomProche} — Noël dans ${jours} jours`;\nconst html = `\n<div style=\"font-family:system-ui,Arial,sans-serif;color:#222;max-width:560px\">\n  <p>Bonjour ${prenomUtilisateur},</p>\n  <p><strong>Noël</strong> approche pour ${prenomProche} !<br>Voici 5 idées sélectionnées pour lui/elle :</p>\n  <ul style=\"list-style:none;padding:0\">${lignesHtml.join('')}</ul>\n  <p><a href=\"${lienApp}\">Voir d'autres idées →</a></p>\n</div>`.trim();\n\nreturn [{\n  json: {\n    sujet,\n    html,\n    destinataire_email: ev.proches?.profils?.email || $env.RESEND_FALLBACK_TO || '',\n    lignes_log: lignesLog,\n    a_envoyer: lignesLog.length > 0,\n  },\n}];"
+      },
+      "id": "compose-email",
+      "name": "Composer e-mail + log",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1160, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "typeValidation": "strict", "version": 2 },
+          "conditions": [
+            {
+              "id": "a-envoyer",
+              "leftValue": "={{ $json.a_envoyer }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "true", "singleValue": true }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-propositions",
+      "name": "Au moins 1 proposition ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [1380, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.resend.com/emails",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $env.RESEND_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ from: $env.RESEND_FROM, to: [$json.destinataire_email], subject: $json.sujet, html: $json.html }) }}",
+        "options": {}
+      },
+      "id": "envoi-resend",
+      "name": "Resend — envoi e-mail",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1600, 220]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/propositions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "Prefer", "value": "return=minimal" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Composer e-mail + log').item.json.lignes_log.map(l => ({ ...l, envoyee_le: new Date().toISOString() }))) }}",
+        "options": {}
+      },
+      "id": "log-propositions",
+      "name": "Supabase — log propositions",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1820, 220]
+    }
+  ],
+  "connections": {
+    "Chaque matin 8h00": {
+      "main": [[{ "node": "Supabase — événements Noël actifs", "type": "main", "index": 0 }]]
+    },
+    "Supabase — événements Noël actifs": {
+      "main": [[{ "node": "Éclater les événements", "type": "main", "index": 0 }]]
+    },
+    "Éclater les événements": {
+      "main": [[{ "node": "Filtre J-30 / J-14 / J-7", "type": "main", "index": 0 }]]
+    },
+    "Filtre J-30 / J-14 / J-7": {
+      "main": [[{ "node": "Edge Function matching", "type": "main", "index": 0 }]]
+    },
+    "Edge Function matching": {
+      "main": [[{ "node": "Supabase — détails produits", "type": "main", "index": 0 }]]
+    },
+    "Supabase — détails produits": {
+      "main": [[{ "node": "Composer e-mail + log", "type": "main", "index": 0 }]]
+    },
+    "Composer e-mail + log": {
+      "main": [[{ "node": "Au moins 1 proposition ?", "type": "main", "index": 0 }]]
+    },
+    "Au moins 1 proposition ?": {
+      "main": [
+        [{ "node": "Resend — envoi e-mail", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Resend — envoi e-mail": {
+      "main": [[{ "node": "Supabase — log propositions", "type": "main", "index": 0 }]]
+    }
+  }
+}

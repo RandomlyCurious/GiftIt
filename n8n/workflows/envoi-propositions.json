@@ -1,0 +1,236 @@
+{
+  "name": "GiftMatch — Rappels événements (envoi-propositions)",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "meta": {
+    "description": "Workflow GÉNÉRIQUE (le cœur, cf. CLAUDE.md §8). Chaque matin à 8h00 : sélectionne TOUS les événements actifs dont la prochaine occurrence tombe à J-30, J-14 ou J-7 (tous types confondus : anniversaire, noel, fete_meres, fete_peres, fete_grands_parents, saint_valentin, autre). Pour chaque événement : appelle la Edge Function `matching`, envoie 5 propositions par e-mail via Resend, puis logue les propositions dans la table `propositions`. Les workflows `rappel-anniversaire.json` et `rappel-noel.json` sont des SPÉCIALISATIONS (un seul type d'événement) ; ne pas activer les trois en même temps pour le même type sous peine d'e-mails en double."
+  },
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 0 8 * * *"
+            }
+          ]
+        }
+      },
+      "id": "cron-8h",
+      "name": "Chaque matin 8h00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-160, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/evenements",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "select", "value": "id,type,date_fixe,actif,proche_id,proches(id,prenom,nom,date_naissance,user_id,profils(prenom,nom))" },
+            { "name": "actif", "value": "eq.true" }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-evenements",
+      "name": "Supabase — événements actifs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [60, 300]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "data",
+        "options": {}
+      },
+      "id": "split-evenements",
+      "name": "Éclater les événements",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [280, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// =========================================================================\n// Calcul de la prochaine date de chaque événement + filtre J-30 / J-14 / J-7.\n// -------------------------------------------------------------------------\n// Pour CHAQUE événement reçu, on calcule sa prochaine occurrence selon son\n// type (cf. CLAUDE.md §8) :\n//   - anniversaire : prochain jour/mois de `proches.date_naissance`.\n//   - noel : 25 décembre.\n//   - saint_valentin : 14 février.\n//   - fete_meres : dernier dimanche de mai (règle FR ; report au 1er dim. de\n//     juin si coïncide avec la Pentecôte — non géré ici, simplifié au dernier\n//     dimanche de mai pour le MVP). Voir NOTE plus bas.\n//   - fete_peres : 3e dimanche de juin.\n//   - fete_grands_parents : 1er dimanche d'octobre.\n//   - autre : `evenements.date_fixe` (prochaine occurrence si déjà passée).\n//\n// On ne garde que les événements dont le nombre de jours restants vaut\n// exactement 30, 14 ou 7. On enrichit chaque item conservé avec joursRestants\n// et la date calculée, pour la suite du workflow.\n//\n// NOTE règle fêtes mobiles : le CdC §8 dit \"1er dimanche de juin\" pour la fête\n// des mères. On suit STRICTEMENT le CLAUDE.md ici (1er dimanche de juin) pour\n// rester fidèle à la spec ; ajuster si la règle légale FR (dernier dim. de mai)\n// est préférée.\n// =========================================================================\n\nconst SEUILS = [30, 14, 7];\n\n// Date du jour à minuit (heure locale du serveur n8n).\nconst aujourdhui = new Date();\naujourdhui.setHours(0, 0, 0, 0);\n\n// Renvoie le N-ième (1-indexé) dimanche d'un mois donné (mois 0-indexé).\nfunction niemeDimanche(annee, mois, n) {\n  const premier = new Date(annee, mois, 1);\n  const decalage = (7 - premier.getDay()) % 7; // jours jusqu'au 1er dimanche\n  const jour = 1 + decalage + (n - 1) * 7;\n  return new Date(annee, mois, jour);\n}\n\n// Construit une date \"prochaine occurrence\" sur jour/mois fixes : si déjà\n// passée cette année, on bascule sur l'année suivante.\nfunction prochaineOccurrence(mois, jour) {\n  const annee = aujourdhui.getFullYear();\n  let d = new Date(annee, mois, jour);\n  d.setHours(0, 0, 0, 0);\n  if (d < aujourdhui) d = new Date(annee + 1, mois, jour);\n  return d;\n}\n\nfunction prochainDimancheCalcule(calculer) {\n  const annee = aujourdhui.getFullYear();\n  let d = calculer(annee);\n  d.setHours(0, 0, 0, 0);\n  if (d < aujourdhui) d = calculer(annee + 1);\n  return d;\n}\n\nfunction dateProchaineOccurrence(ev) {\n  switch (ev.type) {\n    case 'anniversaire': {\n      const dn = new Date(ev.proches.date_naissance);\n      return prochaineOccurrence(dn.getMonth(), dn.getDate());\n    }\n    case 'noel':\n      return prochaineOccurrence(11, 25); // 25 décembre\n    case 'saint_valentin':\n      return prochaineOccurrence(1, 14); // 14 février\n    case 'fete_meres':\n      return prochainDimancheCalcule((a) => niemeDimanche(a, 5, 1)); // 1er dim. juin\n    case 'fete_peres':\n      return prochainDimancheCalcule((a) => niemeDimanche(a, 5, 3)); // 3e dim. juin\n    case 'fete_grands_parents':\n      return prochainDimancheCalcule((a) => niemeDimanche(a, 9, 1)); // 1er dim. octobre\n    case 'autre': {\n      if (!ev.date_fixe) return null;\n      const df = new Date(ev.date_fixe);\n      return prochaineOccurrence(df.getMonth(), df.getDate());\n    }\n    default:\n      return null;\n  }\n}\n\nconst MS_PAR_JOUR = 1000 * 60 * 60 * 24;\nconst sortie = [];\n\nfor (const item of $input.all()) {\n  const ev = item.json;\n  const dateEv = dateProchaineOccurrence(ev);\n  if (!dateEv) continue;\n\n  const joursRestants = Math.round((dateEv - aujourdhui) / MS_PAR_JOUR);\n  if (!SEUILS.includes(joursRestants)) continue;\n\n  sortie.push({\n    json: {\n      ...ev,\n      jours_restants: joursRestants,\n      date_evenement: dateEv.toISOString().slice(0, 10),\n    },\n  });\n}\n\nreturn sortie;"
+      },
+      "id": "filtre-dates",
+      "name": "Filtre J-30 / J-14 / J-7",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/functions/v1/matching",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ proche_id: $json.proche_id, evenement_id: $json.id, nb_propositions: 5 }) }}",
+        "options": {}
+      },
+      "id": "appel-matching",
+      "name": "Edge Function matching",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [720, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/produits",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "select", "value": "id,nom,prix_min,prix_max,url_produit,url_image" },
+            { "name": "id", "value": "=in.({{ ($json.propositions || []).map(p => p.produit_id).join(',') }})" }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-produits",
+      "name": "Supabase — détails produits",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [940, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// =========================================================================\n// Assemble l'e-mail et le payload de log à partir de :\n//   - l'événement enrichi (node \"Filtre J-30 / J-14 / J-7\"),\n//   - les propositions scorées (node \"Edge Function matching\"),\n//   - les détails produits (node \"Supabase — détails produits\", item courant).\n//\n// On RÉ-ALIGNE les produits sur l'ordre/score des propositions, on construit le\n// HTML du mail (template CLAUDE.md §9) et le tableau `lignes_log` prêt pour\n// l'INSERT dans `propositions`.\n// =========================================================================\n\nconst ev = $('Filtre J-30 / J-14 / J-7').item.json;\nconst propositions = $('Edge Function matching').item.json.propositions || [];\nconst produits = $input.item.json.data || $input.item.json || [];\n\n// Index produit par id pour ré-aligner sur l'ordre des propositions.\nconst parId = {};\nfor (const p of produits) parId[p.id] = p;\n\n// Libellés lisibles des types d'événement.\nconst LIBELLES = {\n  anniversaire: 'Anniversaire',\n  noel: 'Noël',\n  fete_meres: 'Fête des mères',\n  fete_peres: 'Fête des pères',\n  fete_grands_parents: 'Fête des grands-parents',\n  saint_valentin: 'Saint-Valentin',\n  autre: 'Événement',\n};\nconst libelleEvenement = LIBELLES[ev.type] || 'Événement';\n\n// Prénoms : utilisateur (profils) et proche.\nconst prenomUtilisateur = ev.proches?.profils?.prenom || '';\nconst prenomProche = ev.proches?.prenom || '';\nconst jours = ev.jours_restants;\n\n// Formatage prix : « 25–40 € » ou « 25 € » si min == max.\nfunction formatPrix(p) {\n  const min = p.prix_min != null ? Math.round(p.prix_min) : null;\n  const max = p.prix_max != null ? Math.round(p.prix_max) : null;\n  if (min != null && max != null) return min === max ? `${min} €` : `${min}–${max} €`;\n  if (min != null) return `dès ${min} €`;\n  if (max != null) return `jusqu'à ${max} €`;\n  return '';\n}\n\n// Lignes (texte + HTML) dans l'ordre des propositions, max 5.\nconst lignesHtml = [];\nconst lignesLog = [];\nfor (const prop of propositions.slice(0, 5)) {\n  const produit = parId[prop.produit_id];\n  if (!produit) continue;\n  const prix = formatPrix(produit);\n  lignesHtml.push(\n    `<li style=\"margin:8px 0\"><a href=\"${produit.url_produit}\">${produit.nom}</a>${prix ? ` — <strong>${prix}</strong>` : ''}</li>`\n  );\n  lignesLog.push({\n    proche_id: ev.proche_id,\n    evenement_id: ev.id,\n    produit_id: prop.produit_id,\n    score: prop.score,\n  });\n}\n\nconst lienApp = $env.APP_URL || 'https://giftmatch.app';\n\nconst sujet = `🎁 Idées cadeaux pour ${prenomProche} — ${libelleEvenement} dans ${jours} jours`;\n\nconst html = `\n<div style=\"font-family:system-ui,Arial,sans-serif;color:#222;max-width:560px\">\n  <p>Bonjour ${prenomUtilisateur},</p>\n  <p><strong>${libelleEvenement}</strong> de ${prenomProche} approche !<br>Voici 5 idées sélectionnées pour lui/elle :</p>\n  <ul style=\"list-style:none;padding:0\">${lignesHtml.join('')}</ul>\n  <p><a href=\"${lienApp}\">Voir d'autres idées →</a></p>\n</div>`.trim();\n\nreturn [{\n  json: {\n    sujet,\n    html,\n    destinataire_email: ev.proches?.profils?.email || $env.RESEND_FALLBACK_TO || '',\n    lignes_log: lignesLog,\n    a_envoyer: lignesLog.length > 0,\n  },\n}];"
+      },
+      "id": "compose-email",
+      "name": "Composer e-mail + log",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1160, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "typeValidation": "strict", "version": 2 },
+          "conditions": [
+            {
+              "id": "a-envoyer",
+              "leftValue": "={{ $json.a_envoyer }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "true", "singleValue": true }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-propositions",
+      "name": "Au moins 1 proposition ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [1380, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.resend.com/emails",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $env.RESEND_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ from: $env.RESEND_FROM, to: [$json.destinataire_email], subject: $json.sujet, html: $json.html }) }}",
+        "options": {}
+      },
+      "id": "envoi-resend",
+      "name": "Resend — envoi e-mail",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1600, 220]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/propositions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "Prefer", "value": "return=minimal" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Composer e-mail + log').item.json.lignes_log.map(l => ({ ...l, envoyee_le: new Date().toISOString() }))) }}",
+        "options": {}
+      },
+      "id": "log-propositions",
+      "name": "Supabase — log propositions",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1820, 220]
+    }
+  ],
+  "connections": {
+    "Chaque matin 8h00": {
+      "main": [[{ "node": "Supabase — événements actifs", "type": "main", "index": 0 }]]
+    },
+    "Supabase — événements actifs": {
+      "main": [[{ "node": "Éclater les événements", "type": "main", "index": 0 }]]
+    },
+    "Éclater les événements": {
+      "main": [[{ "node": "Filtre J-30 / J-14 / J-7", "type": "main", "index": 0 }]]
+    },
+    "Filtre J-30 / J-14 / J-7": {
+      "main": [[{ "node": "Edge Function matching", "type": "main", "index": 0 }]]
+    },
+    "Edge Function matching": {
+      "main": [[{ "node": "Supabase — détails produits", "type": "main", "index": 0 }]]
+    },
+    "Supabase — détails produits": {
+      "main": [[{ "node": "Composer e-mail + log", "type": "main", "index": 0 }]]
+    },
+    "Composer e-mail + log": {
+      "main": [[{ "node": "Au moins 1 proposition ?", "type": "main", "index": 0 }]]
+    },
+    "Au moins 1 proposition ?": {
+      "main": [
+        [{ "node": "Resend — envoi e-mail", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Resend — envoi e-mail": {
+      "main": [[{ "node": "Supabase — log propositions", "type": "main", "index": 0 }]]
+    }
+  }
+}

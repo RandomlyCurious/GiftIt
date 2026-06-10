@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, CalendarHeart, CheckCircle2, Sparkles } from "lucide-react";
+import { ArrowLeft, CalendarHeart, CheckCircle2, Gift, Sparkles } from "lucide-react";
 import { createClient } from "@/lib/supabase-server";
 import { buttonVariants } from "@/components/ui/button";
 import {
@@ -9,6 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { libelleEvenement, prochaineDateEvenement } from "@/lib/evenements";
 
 const LIBELLE_RELATION: Record<string, string> = {
   conjoint: "Conjoint·e",
@@ -18,16 +19,6 @@ const LIBELLE_RELATION: Record<string, string> = {
   ami: "Ami·e",
   collegue: "Collègue",
   autre: "Autre",
-};
-
-const LIBELLE_EVENEMENT: Record<string, string> = {
-  anniversaire: "Anniversaire",
-  noel: "Noël",
-  fete_meres: "Fête des mères",
-  fete_peres: "Fête des pères",
-  fete_grands_parents: "Fête des grands-parents",
-  saint_valentin: "Saint-Valentin",
-  autre: "Événement",
 };
 
 // Fiche détaillée d'un proche. Server Component (RLS limite déjà à ses proches).
@@ -41,7 +32,9 @@ export default async function FicheProchePage({
   // Proche + ses tags + ses événements en une requête imbriquée.
   const { data: proche, error } = await supabase
     .from("proches")
-    .select("*, proche_tags(tag_slug, tags(libelle)), evenements(id, type, actif)")
+    .select(
+      "*, proche_tags(tag_slug, tags(libelle)), evenements(id, type, actif, date_fixe)",
+    )
     .eq("id", params.id)
     .single();
 
@@ -54,6 +47,23 @@ export default async function FicheProchePage({
 
   const nbSwipes = proche.nb_swipes ?? 0;
   const progression = Math.min(100, (nbSwipes / 5) * 100);
+
+  // Prochain événement actif (le plus proche dans le temps) : sert de cible au
+  // bouton "Voir des idées cadeaux". Calcul des dates délégué à la lib (§11).
+  const aujourdhui = new Date();
+  const prochainEvenement = proche.evenements
+    .filter((ev) => ev.actif !== false)
+    .map((ev) => ({
+      ev,
+      date: prochaineDateEvenement(
+        ev.type,
+        proche.date_naissance,
+        ev.date_fixe,
+        aujourdhui,
+      ),
+    }))
+    .filter((x): x is { ev: (typeof proche.evenements)[number]; date: Date } => x.date !== null)
+    .sort((a, b) => a.date.getTime() - b.date.getTime())[0];
 
   return (
     <main className="mx-auto max-w-2xl px-6 py-10">
@@ -108,6 +118,47 @@ export default async function FicheProchePage({
         </CardContent>
       </Card>
 
+      {/* Idées cadeaux : cible le prochain événement actif s'il en existe un. */}
+      <Card className="mb-4">
+        <CardHeader>
+          <CardTitle className="text-base">Idées cadeaux</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {prochainEvenement ? (
+            <>
+              <p className="text-sm text-muted-foreground">
+                Prochain événement :{" "}
+                <span className="font-medium text-foreground">
+                  {libelleEvenement(prochainEvenement.ev.type)}
+                </span>
+                .
+              </p>
+              <Link
+                href={`/proches/${proche.id}/propositions?evenement=${prochainEvenement.ev.id}`}
+                className={buttonVariants({ size: "sm" })}
+              >
+                <Gift className="h-4 w-4" />
+                Voir des idées cadeaux
+              </Link>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-muted-foreground">
+                Aucun événement actif. Ajoutez-en un pour générer des idées
+                cadeaux au bon moment.
+              </p>
+              <span
+                aria-disabled="true"
+                className={buttonVariants({ size: "sm", variant: "outline" }) + " pointer-events-none opacity-50"}
+              >
+                <Gift className="h-4 w-4" />
+                Voir des idées cadeaux
+              </span>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Centres d'intérêt */}
       <Card className="mb-4">
         <CardHeader>
@@ -144,7 +195,7 @@ export default async function FicheProchePage({
               {proche.evenements.map((ev) => (
                 <li key={ev.id} className="flex items-center gap-2 text-sm">
                   <CalendarHeart className="h-4 w-4 text-primary" />
-                  {LIBELLE_EVENEMENT[ev.type] ?? ev.type}
+                  {libelleEvenement(ev.type)}
                 </li>
               ))}
             </ul>

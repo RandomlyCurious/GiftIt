@@ -1,18 +1,20 @@
 import Link from "next/link";
-import { Gift, LogOut, Plus } from "lucide-react";
+import { CalendarHeart, Gift, LogOut, Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase-server";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { ProcheCard } from "@/components/ProcheCard";
+import { prochaineDateEvenement } from "@/lib/evenements";
 
 // Espace utilisateur : liste de ses proches. Server Component (RLS filtre déjà
 // les lignes par user_id, mais on est aussi protégé par le middleware).
 export default async function DashboardPage() {
   const supabase = createClient();
 
-  // On récupère les proches avec le nombre d'événements associés (count).
+  // On récupère les proches avec leurs événements actifs (pour le décompte et le
+  // tri par prochain événement).
   const { data: proches, error } = await supabase
     .from("proches")
-    .select("*, evenements(count)")
+    .select("*, evenements(id, type, date_fixe, actif)")
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -26,6 +28,26 @@ export default async function DashboardPage() {
     );
   }
 
+  // Tri (bonus §) : on remonte les proches dont le prochain événement actif est le
+  // plus proche. Ceux sans événement passent en fin de liste. Calcul des dates en lib.
+  const aujourdhui = new Date();
+  const prochaineDateProche = (
+    evenements: { type: string; date_fixe: string | null; actif: boolean | null }[],
+    dateNaissance: string,
+  ): number => {
+    const dates = evenements
+      .filter((ev) => ev.actif !== false)
+      .map((ev) => prochaineDateEvenement(ev.type, dateNaissance, ev.date_fixe, aujourdhui))
+      .filter((d): d is Date => d !== null)
+      .map((d) => d.getTime());
+    return dates.length > 0 ? Math.min(...dates) : Number.POSITIVE_INFINITY;
+  };
+  const prochesTries = [...proches].sort(
+    (a, b) =>
+      prochaineDateProche(a.evenements, a.date_naissance) -
+      prochaineDateProche(b.evenements, b.date_naissance),
+  );
+
   return (
     <main className="mx-auto max-w-4xl px-6 py-10">
       <header className="mb-8 flex items-center justify-between">
@@ -33,12 +55,21 @@ export default async function DashboardPage() {
           <Gift className="h-7 w-7" />
           <span className="text-2xl font-bold">GiftMatch</span>
         </div>
-        <form action="/auth/signout" method="post">
-          <Button type="submit" variant="ghost" size="sm">
-            <LogOut className="h-4 w-4" />
-            Se déconnecter
-          </Button>
-        </form>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/evenements"
+            className={buttonVariants({ variant: "ghost", size: "sm" })}
+          >
+            <CalendarHeart className="h-4 w-4" />
+            Événements
+          </Link>
+          <form action="/auth/signout" method="post">
+            <Button type="submit" variant="ghost" size="sm">
+              <LogOut className="h-4 w-4" />
+              Se déconnecter
+            </Button>
+          </form>
+        </div>
       </header>
 
       <div className="mb-6 flex items-center justify-between">
@@ -63,17 +94,13 @@ export default async function DashboardPage() {
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {proches.map((proche) => {
-            // Le count arrive sous la forme [{ count: n }] via PostgREST.
-            const nbEvenements = proche.evenements?.[0]?.count ?? 0;
-            return (
-              <ProcheCard
-                key={proche.id}
-                proche={proche}
-                nbEvenements={nbEvenements}
-              />
-            );
-          })}
+          {prochesTries.map((proche) => (
+            <ProcheCard
+              key={proche.id}
+              proche={proche}
+              nbEvenements={proche.evenements?.length ?? 0}
+            />
+          ))}
         </div>
       )}
     </main>
