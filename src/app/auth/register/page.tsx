@@ -31,9 +31,12 @@ export default function RegisterPage() {
     setMessage(null);
     setChargement(true);
 
+    // prenom/nom passés en métadonnées : le profil est créé côté BDD par le
+    // trigger handle_new_user (migration 007), qui couvre aussi l'OAuth Google.
     const { data, error } = await supabase.auth.signUp({
       email,
       password: motDePasse,
+      options: { data: { prenom, nom: nom || null } },
     });
 
     if (error) {
@@ -41,22 +44,6 @@ export default function RegisterPage() {
       setErreur("L'inscription a échoué. Cet email est peut-être déjà utilisé.");
       setChargement(false);
       return;
-    }
-
-    // Création de la ligne profil (id = id de l'utilisateur fraîchement créé).
-    if (data.user) {
-      const { error: erreurProfil } = await supabase
-        .from("profils")
-        .insert({ id: data.user.id, prenom, nom: nom || null });
-      if (erreurProfil) {
-        console.error(erreurProfil);
-        // Le compte existe mais le profil n'a pas pu être créé : on alerte sans bloquer.
-        setErreur(
-          "Compte créé, mais le profil n'a pas pu être enregistré. Contactez le support.",
-        );
-        setChargement(false);
-        return;
-      }
     }
 
     // Si la confirmation par email est activée, aucune session n'est ouverte ici.
