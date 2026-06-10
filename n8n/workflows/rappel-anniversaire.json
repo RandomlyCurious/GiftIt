@@ -125,7 +125,30 @@
     },
     {
       "parameters": {
-        "jsCode": "// Assemble l'e-mail (template §9) + le payload de log à partir de\n// l'événement enrichi, des propositions scorées et des détails produits.\n// Type fixe ici : 'anniversaire'.\n\nconst ev = $('Filtre J-30 / J-14 / J-7').item.json;\nconst propositions = $('Edge Function matching').item.json.propositions || [];\nconst produits = $input.item.json.data || $input.item.json || [];\n\nconst parId = {};\nfor (const p of produits) parId[p.id] = p;\n\nconst prenomUtilisateur = ev.proches?.profils?.prenom || '';\nconst prenomProche = ev.proches?.prenom || '';\nconst jours = ev.jours_restants;\n\nfunction formatPrix(p) {\n  const min = p.prix_min != null ? Math.round(p.prix_min) : null;\n  const max = p.prix_max != null ? Math.round(p.prix_max) : null;\n  if (min != null && max != null) return min === max ? `${min} €` : `${min}–${max} €`;\n  if (min != null) return `dès ${min} €`;\n  if (max != null) return `jusqu'à ${max} €`;\n  return '';\n}\n\nconst lignesHtml = [];\nconst lignesLog = [];\nfor (const prop of propositions.slice(0, 5)) {\n  const produit = parId[prop.produit_id];\n  if (!produit) continue;\n  const prix = formatPrix(produit);\n  lignesHtml.push(\n    `<li style=\"margin:8px 0\"><a href=\"${produit.url_produit}\">${produit.nom}</a>${prix ? ` — <strong>${prix}</strong>` : ''}</li>`\n  );\n  lignesLog.push({ proche_id: ev.proche_id, evenement_id: ev.id, produit_id: prop.produit_id, score: prop.score });\n}\n\nconst lienApp = $env.APP_URL || 'https://giftmatch.app';\nconst sujet = `🎁 Idées cadeaux pour ${prenomProche} — Anniversaire dans ${jours} jours`;\nconst html = `\n<div style=\"font-family:system-ui,Arial,sans-serif;color:#222;max-width:560px\">\n  <p>Bonjour ${prenomUtilisateur},</p>\n  <p><strong>Anniversaire</strong> de ${prenomProche} approche !<br>Voici 5 idées sélectionnées pour lui/elle :</p>\n  <ul style=\"list-style:none;padding:0\">${lignesHtml.join('')}</ul>\n  <p><a href=\"${lienApp}\">Voir d'autres idées →</a></p>\n</div>`.trim();\n\nreturn [{\n  json: {\n    sujet,\n    html,\n    destinataire_email: ev.proches?.profils?.email || $env.RESEND_FALLBACK_TO || '',\n    lignes_log: lignesLog,\n    a_envoyer: lignesLog.length > 0,\n  },\n}];"
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/email_utilisateur",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ uid: $('Filtre J-30 / J-14 / J-7').item.json.proches.user_id }) }}",
+        "options": {}
+      },
+      "id": "get-email-utilisateur",
+      "name": "Supabase — e-mail utilisateur (RPC)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Assemble l'e-mail (template §9) + le payload de log à partir de\n// l'événement enrichi, des propositions scorées, des détails produits et de\n// l'e-mail du destinataire (RPC email_utilisateur). Type fixe ici : 'anniversaire'.\n\nconst ev = $('Filtre J-30 / J-14 / J-7').item.json;\nconst propositions = $('Edge Function matching').item.json.propositions || [];\nconst produits = $('Supabase — détails produits').item.json.data || $('Supabase — détails produits').item.json || [];\n\n// E-mail résolu via la RPC `email_utilisateur` (auth.users) : chaîne JSON brute\n// ou null ; repli sur RESEND_FALLBACK_TO le cas échéant.\nconst rpcEmail = $('Supabase — e-mail utilisateur (RPC)').item.json;\nconst emailUtilisateur = (typeof rpcEmail === 'string' ? rpcEmail : (rpcEmail?.data ?? rpcEmail)) || '';\n\nconst parId = {};\nfor (const p of produits) parId[p.id] = p;\n\nconst prenomUtilisateur = ev.proches?.profils?.prenom || '';\nconst prenomProche = ev.proches?.prenom || '';\nconst jours = ev.jours_restants;\n\nfunction formatPrix(p) {\n  const min = p.prix_min != null ? Math.round(p.prix_min) : null;\n  const max = p.prix_max != null ? Math.round(p.prix_max) : null;\n  if (min != null && max != null) return min === max ? `${min} €` : `${min}–${max} €`;\n  if (min != null) return `dès ${min} €`;\n  if (max != null) return `jusqu'à ${max} €`;\n  return '';\n}\n\nconst lignesHtml = [];\nconst lignesLog = [];\nfor (const prop of propositions.slice(0, 5)) {\n  const produit = parId[prop.produit_id];\n  if (!produit) continue;\n  const prix = formatPrix(produit);\n  lignesHtml.push(\n    `<li style=\"margin:8px 0\"><a href=\"${produit.url_produit}\">${produit.nom}</a>${prix ? ` — <strong>${prix}</strong>` : ''}</li>`\n  );\n  lignesLog.push({ proche_id: ev.proche_id, evenement_id: ev.id, produit_id: prop.produit_id, score: prop.score });\n}\n\nconst lienApp = $env.APP_URL || 'https://giftmatch.app';\nconst sujet = `🎁 Idées cadeaux pour ${prenomProche} — Anniversaire dans ${jours} jours`;\nconst html = `\n<div style=\"font-family:system-ui,Arial,sans-serif;color:#222;max-width:560px\">\n  <p>Bonjour ${prenomUtilisateur},</p>\n  <p><strong>Anniversaire</strong> de ${prenomProche} approche !<br>Voici 5 idées sélectionnées pour lui/elle :</p>\n  <ul style=\"list-style:none;padding:0\">${lignesHtml.join('')}</ul>\n  <p><a href=\"${lienApp}\">Voir d'autres idées →</a></p>\n</div>`.trim();\n\nreturn [{\n  json: {\n    sujet,\n    html,\n    destinataire_email: emailUtilisateur || $env.RESEND_FALLBACK_TO || '',\n    lignes_log: lignesLog,\n    a_envoyer: lignesLog.length > 0,\n  },\n}];"
       },
       "id": "compose-email",
       "name": "Composer e-mail + log",
@@ -219,6 +242,9 @@
       "main": [[{ "node": "Supabase — détails produits", "type": "main", "index": 0 }]]
     },
     "Supabase — détails produits": {
+      "main": [[{ "node": "Supabase — e-mail utilisateur (RPC)", "type": "main", "index": 0 }]]
+    },
+    "Supabase — e-mail utilisateur (RPC)": {
       "main": [[{ "node": "Composer e-mail + log", "type": "main", "index": 0 }]]
     },
     "Composer e-mail + log": {

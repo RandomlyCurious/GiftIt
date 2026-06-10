@@ -33,6 +33,7 @@ Cron 8h00
   → Calcul de la prochaine date + filtre J-30 / J-14 / J-7         [Code node]
   → POST /functions/v1/matching  → 5 propositions { produit_id, score }  [HTTP Request]
   → Supabase GET /rest/v1/produits?id=in.(...)  → nom, prix, url    [HTTP Request]
+  → POST /rest/v1/rpc/email_utilisateur { uid: user_id }  → e-mail   [HTTP Request]
   → Composer sujet + HTML (template §9) + lignes de log            [Code node]
   → IF au moins 1 proposition
        → POST https://api.resend.com/emails                        [HTTP Request]
@@ -79,7 +80,7 @@ N8n (`={{ $env.NOM }}`). À définir sur l'instance N8n (fichier `.env` de N8n, 
 | `SUPABASE_SERVICE_ROLE_KEY` | service role key Supabase | `apikey` + `Authorization: Bearer` (bypass RLS pour la lecture serveur et le log) |
 | `RESEND_API_KEY` | `re_...` | `Authorization: Bearer` vers `api.resend.com` |
 | `RESEND_FROM` | ex. `GiftMatch <hello@votre-domaine.fr>` | Champ `from` de l'e-mail (domaine vérifié chez Resend) |
-| `RESEND_FALLBACK_TO` | ex. `pierremassonmot@gmail.com` | Destinataire de repli (voir point d'attention email ci-dessous) |
+| `RESEND_FALLBACK_TO` | ex. `pierremassonmot@gmail.com` | Destinataire de **repli** si la RPC `email_utilisateur` renvoie null/vide (voir section dédiée ci-dessous) |
 | `APP_URL` | ex. `https://giftmatch.app` | Lien « Voir d'autres idées → » |
 
 > Alternative : remplacer les en-têtes `Authorization`/`apikey` par des **credentials N8n**
@@ -88,22 +89,38 @@ N8n (`={{ $env.NOM }}`). À définir sur l'instance N8n (fichier `.env` de N8n, 
 
 ---
 
-## ⚠️ Point d'attention : adresse e-mail du destinataire
+## Résolution de l'adresse e-mail du destinataire (RPC `email_utilisateur`)
 
 Le destinataire d'un e-mail est **l'utilisateur** (le propriétaire du proche), pas le proche.
 Son e-mail vit dans `auth.users.email`, **pas** dans la table `profils` (qui n'a que
-`prenom`/`nom`). L'embed PostgREST `proches(...profils(prenom,nom))` **ne ramène donc pas
-l'e-mail**, et le Code node retombe actuellement sur `RESEND_FALLBACK_TO`.
+`prenom`/`nom`). L'embed PostgREST ne peut donc pas le ramener directement.
 
-Trois façons de fournir le vrai e-mail (à trancher avec l'agent BDD) :
+La résolution se fait désormais via une **fonction SQL** `public.email_utilisateur(uid uuid)
+→ text` (`SECURITY DEFINER`, exécutable par `service_role`), qui lit l'e-mail depuis
+`auth.users`. Chaque workflow l'appelle dans le node **« Supabase — e-mail utilisateur (RPC) »**,
+inséré **après** « Supabase — détails produits » et **avant** « Composer e-mail + log » :
 
-1. **Ajouter une colonne `email` à `profils`** (dénormalisée, alimentée à l'inscription) — la
-   plus simple côté N8n : ajouter `email` au `select` de `profils(...)` et l'embed la ramène.
-2. **Vue/RPC SQL** exposant `user_id → email` (jointure `auth.users`), appelée en plus.
-3. **Endpoint Admin Auth** `GET /auth/v1/admin/users/{user_id}` (service role) en node HTTP
-   supplémentaire avant la composition.
+```
+POST {SUPABASE_URL}/rest/v1/rpc/email_utilisateur
+Headers : apikey + Authorization: Bearer {SERVICE_ROLE_KEY}, Content-Type: application/json
+Body    : { "uid": <user_id du proche> }     (user_id lu sur l'événement enrichi via l'embed proches(...,user_id,...))
+Réponse : l'e-mail en chaîne JSON (ex: "user@exemple.fr"), ou null si introuvable.
+```
 
-Tant que ce n'est pas branché, configurez `RESEND_FALLBACK_TO` pour tester de bout en bout.
+Le `user_id` provient de l'embed `proches(...,user_id,...)` déjà présent dans le `select` du
+node GET `evenements`. Le Code node « Composer e-mail + log » lit la réponse de la RPC et
+définit le destinataire :
+
+```
+destinataire_email = emailUtilisateur || $env.RESEND_FALLBACK_TO || ''
+```
+
+`RESEND_FALLBACK_TO` n'est donc plus utilisé qu'en **repli** si la RPC renvoie `null`/vide
+(utilisateur introuvable, e-mail non renseigné).
+
+> ⚠️ **Prérequis** : la **migration 005** (qui crée `public.email_utilisateur`) doit être
+> appliquée sur Supabase, sinon l'appel RPC renvoie une erreur 404 et les workflows retombent
+> sur `RESEND_FALLBACK_TO`. Pensez aussi à définir `RESEND_FALLBACK_TO` pour le repli.
 
 ---
 
