@@ -150,8 +150,11 @@ CREATE TABLE evenements (
   created_at timestamptz DEFAULT now()
 );
 
--- Catalogue de cadeaux
-CREATE TABLE cadeaux (
+-- Catalogue de produits (cadeaux)
+-- NB : renommée cadeaux -> produits (CdC §4.2). MVP = table unique simplifiée
+--      (un produit = un vendeur, champs marchands inline). Le split
+--      produits / produit_vendeur est prévu pour la v1.5.
+CREATE TABLE produits (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
   nom text NOT NULL,
   description text,
@@ -166,21 +169,21 @@ CREATE TABLE cadeaux (
   created_at timestamptz DEFAULT now()
 );
 
--- Tags associés à un cadeau
-CREATE TABLE cadeau_tags (
-  cadeau_id uuid REFERENCES cadeaux(id) ON DELETE CASCADE,
+-- Tags associés à un produit
+CREATE TABLE produit_tags (
+  produit_id uuid REFERENCES produits(id) ON DELETE CASCADE,
   tag_slug text REFERENCES tags(slug),
-  PRIMARY KEY (cadeau_id, tag_slug)
+  PRIMARY KEY (produit_id, tag_slug)
 );
 
 -- Historique des swipes
 CREATE TABLE swipes (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
   proche_id uuid REFERENCES proches(id) ON DELETE CASCADE NOT NULL,
-  cadeau_id uuid REFERENCES cadeaux(id) NOT NULL,
+  produit_id uuid REFERENCES produits(id) NOT NULL,
   direction text CHECK (direction IN ('gauche', 'droite')) NOT NULL,
   created_at timestamptz DEFAULT now(),
-  UNIQUE (proche_id, cadeau_id)      -- un cadeau ne peut être swipé qu'une fois par proche
+  UNIQUE (proche_id, produit_id)     -- un produit ne peut être swipé qu'une fois par proche
 );
 
 -- Propositions envoyées
@@ -188,7 +191,7 @@ CREATE TABLE propositions (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
   proche_id uuid REFERENCES proches(id) ON DELETE CASCADE NOT NULL,
   evenement_id uuid REFERENCES evenements(id) NOT NULL,
-  cadeau_id uuid REFERENCES cadeaux(id) NOT NULL,
+  produit_id uuid REFERENCES produits(id) NOT NULL,
   score float NOT NULL,              -- score de matching calculé
   choisie boolean DEFAULT false,     -- l'utilisateur a marqué ce cadeau comme "choisi"
   envoyee_le timestamptz,
@@ -227,7 +230,7 @@ swipe GAUCHE (négatif) : vecteur_proche[tag] -= 0.3  pour chaque tag du cadeau
 ```
 POST /functions/v1/matching
 Body: { "proche_id": "uuid", "evenement_id": "uuid", "nb_propositions": 5 }
-Retour: { "propositions": [{ "cadeau_id": "uuid", "score": 0.87 }, ...] }
+Retour: { "propositions": [{ "produit_id": "uuid", "score": 0.87 }, ...] }
 ```
 
 ---
@@ -318,7 +321,7 @@ CREATE POLICY "Modification ses proches"
 ```
 
 Même pattern pour : `swipes`, `evenements`, `propositions`, `proche_tags`.
-Les tables `cadeaux`, `tags`, `cadeau_tags` sont en lecture publique (pas de RLS strict).
+Les tables `produits`, `tags`, `produit_tags` sont en lecture publique (pas de RLS strict).
 
 ---
 

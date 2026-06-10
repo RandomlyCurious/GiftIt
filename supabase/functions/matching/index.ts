@@ -2,14 +2,14 @@
 // Edge Function : matching
 // -----------------------------------------------------------------------------
 // Rôle :
-//   Calcule, pour un proche et un événement donnés, les N meilleurs cadeaux à
+//   Calcule, pour un proche et un événement donnés, les N meilleurs produits à
 //   proposer. Le score est une similarité cosinus entre le vecteur de goûts du
-//   proche et le vecteur (binaire) de tags de chaque cadeau du catalogue.
+//   proche et le vecteur (binaire) de tags de chaque produit du catalogue.
 //
 // Algorithme (cf. CLAUDE.md §4) :
-//   score = Σ(proche[tag] × cadeau[tag]) / (|proche| × |cadeau|)
-//   où |v| est la norme euclidienne du vecteur. cadeau[tag] vaut 1 si le tag
-//   est présent dans cadeau_tags, 0 sinon. Si l'une des normes est nulle, le
+//   score = Σ(proche[tag] × produit[tag]) / (|proche| × |produit|)
+//   où |v| est la norme euclidienne du vecteur. produit[tag] vaut 1 si le tag
+//   est présent dans produit_tags, 0 sinon. Si l'une des normes est nulle, le
 //   score vaut 0 (on évite la division par zéro).
 //
 //   Fallback de calibration : tant que le proche n'est pas calibré
@@ -17,13 +17,13 @@
 //   fiable. On utilise alors les tags manuels (proche_tags + leur poids) comme
 //   vecteur de référence. Une fois calibré, on utilise vecteur_gouts.
 //
-//   Sont exclus les cadeaux déjà swipés par ce proche (CdC §4.3 : un cadeau
-//   déjà swipé n'est pas reproposé) et les cadeaux inactifs (actif = false).
+//   Sont exclus les produits déjà swipés par ce proche (CdC §4.3 : un produit
+//   déjà swipé n'est pas reproposé) et les produits inactifs (actif = false).
 //
 // Contrat HTTP :
 //   POST /functions/v1/matching
 //   Body : { "proche_id": "uuid", "evenement_id": "uuid", "nb_propositions": 5 }
-//   Retour : { "propositions": [{ "cadeau_id": "uuid", "score": 0.87 }, ...] }
+//   Retour : { "propositions": [{ "produit_id": "uuid", "score": 0.87 }, ...] }
 //
 //   NB : cette fonction CALCULE et RETOURNE les propositions uniquement.
 //   L'INSERT dans la table `propositions` (log) est géré par N8n (cf. §8) ;
@@ -48,7 +48,7 @@ type RequeteMatching = {
 };
 
 type Proposition = {
-  cadeau_id: string;
+  produit_id: string;
   score: number;
 };
 
@@ -79,25 +79,25 @@ function norme(vecteur: Vecteur): number {
 }
 
 // Similarité cosinus entre le vecteur du proche et le vecteur (binaire) du
-// cadeau. Formule §4 : produit scalaire / (norme proche × norme cadeau).
-// Retourne 0 si l'une des normes est nulle (proche sans goûts ou cadeau sans
+// produit. Formule §4 : produit scalaire / (norme proche × norme produit).
+// Retourne 0 si l'une des normes est nulle (proche sans goûts ou produit sans
 // tags) afin d'éviter toute division par zéro.
-function similariteCosinus(proche: Vecteur, cadeau: Vecteur): number {
+function similariteCosinus(proche: Vecteur, produit: Vecteur): number {
   const normeProche = norme(proche);
-  const normeCadeau = norme(cadeau);
-  if (normeProche === 0 || normeCadeau === 0) {
+  const normeProduit = norme(produit);
+  if (normeProche === 0 || normeProduit === 0) {
     return 0;
   }
 
-  // Produit scalaire : on n'itère que sur les tags du cadeau, car tout tag
-  // absent du cadeau a une valeur 0 et ne contribue pas à la somme.
+  // Produit scalaire : on n'itère que sur les tags du produit, car tout tag
+  // absent du produit a une valeur 0 et ne contribue pas à la somme.
   let produitScalaire = 0;
-  for (const [tag, poidsCadeau] of Object.entries(cadeau)) {
+  for (const [tag, poidsProduit] of Object.entries(produit)) {
     const poidsProche = proche[tag] ?? 0;
-    produitScalaire += poidsProche * poidsCadeau;
+    produitScalaire += poidsProche * poidsProduit;
   }
 
-  return produitScalaire / (normeProche * normeCadeau);
+  return produitScalaire / (normeProche * normeProduit);
 }
 
 // -----------------------------------------------------------------------------
@@ -208,10 +208,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
   }
 
-  // 7. Liste des cadeaux déjà swipés par ce proche (à exclure des propositions).
+  // 7. Liste des produits déjà swipés par ce proche (à exclure des propositions).
   const { data: swipes, error: erreurSwipes } = await supabase
     .from("swipes")
-    .select("cadeau_id")
+    .select("produit_id")
     .eq("proche_id", procheId);
 
   if (erreurSwipes) {
@@ -220,37 +220,37 @@ Deno.serve(async (req: Request): Promise<Response> => {
       500,
     );
   }
-  const cadeauxSwipes = new Set((swipes ?? []).map((s) => s.cadeau_id));
+  const produitsSwipes = new Set((swipes ?? []).map((s) => s.produit_id));
 
-  // 8. Récupération des cadeaux actifs avec leurs tags (jointure cadeau_tags).
-  const { data: cadeaux, error: erreurCadeaux } = await supabase
-    .from("cadeaux")
-    .select("id, cadeau_tags(tag_slug)")
+  // 8. Récupération des produits actifs avec leurs tags (jointure produit_tags).
+  const { data: produits, error: erreurProduits } = await supabase
+    .from("produits")
+    .select("id, produit_tags(tag_slug)")
     .eq("actif", true);
 
-  if (erreurCadeaux) {
+  if (erreurProduits) {
     return reponseErreur(
-      `Erreur lors de la lecture des cadeaux : ${erreurCadeaux.message}`,
+      `Erreur lors de la lecture des produits : ${erreurProduits.message}`,
       500,
     );
   }
 
-  // 9. Calcul du score de chaque cadeau candidat (hors cadeaux déjà swipés).
+  // 9. Calcul du score de chaque produit candidat (hors produits déjà swipés).
   const propositions: Proposition[] = [];
-  for (const cadeau of cadeaux ?? []) {
-    if (cadeauxSwipes.has(cadeau.id)) {
+  for (const produit of produits ?? []) {
+    if (produitsSwipes.has(produit.id)) {
       continue;
     }
 
-    // Vecteur binaire du cadeau : 1 pour chaque tag présent.
-    const vecteurCadeau: Vecteur = {};
-    const tagsCadeau = (cadeau.cadeau_tags ?? []) as { tag_slug: string }[];
-    for (const t of tagsCadeau) {
-      vecteurCadeau[t.tag_slug] = 1;
+    // Vecteur binaire du produit : 1 pour chaque tag présent.
+    const vecteurProduit: Vecteur = {};
+    const tagsProduit = (produit.produit_tags ?? []) as { tag_slug: string }[];
+    for (const t of tagsProduit) {
+      vecteurProduit[t.tag_slug] = 1;
     }
 
-    const score = similariteCosinus(vecteurProche, vecteurCadeau);
-    propositions.push({ cadeau_id: cadeau.id, score });
+    const score = similariteCosinus(vecteurProche, vecteurProduit);
+    propositions.push({ produit_id: produit.id, score });
   }
 
   // 10. Tri par score décroissant et sélection des N meilleurs.
