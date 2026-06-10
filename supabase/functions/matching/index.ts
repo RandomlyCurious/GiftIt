@@ -162,11 +162,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const supabase = createClient(supabaseUrl, serviceRoleKey);
 
   // 5. Récupération du proche (vecteur de goûts, état de calibration).
+  //    maybeSingle() : renvoie null (sans erreur) si le proche n'existe pas,
+  //    pour répondre proprement 404 plutôt que 500 (single() lève sur 0 ligne).
   const { data: proche, error: erreurProche } = await supabase
     .from("proches")
     .select("id, vecteur_gouts, nb_swipes, calibre")
     .eq("id", procheId)
-    .single();
+    .maybeSingle();
 
   if (erreurProche) {
     return reponseErreur(
