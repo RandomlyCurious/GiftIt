@@ -29,6 +29,8 @@ sur la performance ou l'optimisation prématurée. Chaque choix technique doit p
 | Hébergement frontend | Vercel | Déploiement automatique depuis GitHub |
 | Stockage fichiers | Supabase Storage | Photos de proches et images produits |
 
+> Note d'implémentation auth : le frontend utilise `@supabase/ssr` (sessions par cookies + `src/middleware.ts` pour le rafraîchissement et la protection des routes). Client navigateur via `@/lib/supabase`, client serveur via `@/lib/supabase-server`.
+
 ### Ce qu'on n'utilise PAS (et pourquoi)
 - ❌ Prisma / backend Node.js custom → Supabase PostgREST le remplace
 - ❌ Redis / cache → inutile au stade MVP

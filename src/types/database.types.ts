@@ -175,14 +175,14 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "cadeau_tags_cadeau_id_fkey"
+            foreignKeyName: "produit_tags_produit_id_fkey"
             columns: ["produit_id"]
             isOneToOne: false
             referencedRelation: "produits"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "cadeau_tags_tag_slug_fkey"
+            foreignKeyName: "produit_tags_tag_slug_fkey"
             columns: ["tag_slug"]
             isOneToOne: false
             referencedRelation: "tags"
@@ -289,13 +289,6 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "propositions_cadeau_id_fkey"
-            columns: ["produit_id"]
-            isOneToOne: false
-            referencedRelation: "produits"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "propositions_evenement_id_fkey"
             columns: ["evenement_id"]
             isOneToOne: false
@@ -307,6 +300,13 @@ export type Database = {
             columns: ["proche_id"]
             isOneToOne: false
             referencedRelation: "proches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "propositions_produit_id_fkey"
+            columns: ["produit_id"]
+            isOneToOne: false
+            referencedRelation: "produits"
             referencedColumns: ["id"]
           },
         ]
@@ -335,17 +335,17 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "swipes_cadeau_id_fkey"
-            columns: ["produit_id"]
-            isOneToOne: false
-            referencedRelation: "produits"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "swipes_proche_id_fkey"
             columns: ["proche_id"]
             isOneToOne: false
             referencedRelation: "proches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "swipes_produit_id_fkey"
+            columns: ["produit_id"]
+            isOneToOne: false
+            referencedRelation: "produits"
             referencedColumns: ["id"]
           },
         ]
@@ -376,7 +376,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      email_utilisateur: { Args: { uid: string }; Returns: string }
     }
     Enums: {
       [_ in never]: never
