@@ -12,9 +12,18 @@ type CookieToSet = { name: string; value: string; options: CookieOptions };
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
+  const providerError =
+    searchParams.get("error_description") ?? searchParams.get("error");
+
+  // Le fournisseur (Google/Supabase) a renvoyé une erreur explicite.
+  if (providerError) {
+    return NextResponse.redirect(
+      `${origin}/auth/login?error=${encodeURIComponent(providerError)}`,
+    );
+  }
 
   if (!code) {
-    return NextResponse.redirect(`${origin}/auth/login`);
+    return NextResponse.redirect(`${origin}/auth/login?error=no_code`);
   }
 
   // Réponse de succès : les cookies de session y seront écrits par setAll.
@@ -39,8 +48,11 @@ export async function GET(request: NextRequest) {
 
   const { error } = await supabase.auth.exchangeCodeForSession(code);
   if (error) {
-    console.error(error);
-    return NextResponse.redirect(`${origin}/auth/login?error=auth`);
+    // On fait remonter le message réel pour diagnostic (temporaire).
+    console.error("exchangeCodeForSession a échoué:", error);
+    return NextResponse.redirect(
+      `${origin}/auth/login?error=${encodeURIComponent(error.message)}`,
+    );
   }
 
   return response;
