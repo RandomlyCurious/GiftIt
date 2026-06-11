@@ -43,8 +43,13 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Déjà connecté sur /auth -> redirection dashboard.
-  if (user && path.startsWith("/auth")) {
+  // Déjà connecté sur une page d'auth INTERACTIVE (login/register) -> dashboard.
+  // On exclut volontairement /auth/callback et /auth/signout : ces routes doivent
+  // s'exécuter même connecté (sinon la déconnexion ne part jamais, et le retour
+  // OAuth serait court-circuité).
+  const estPageAuthInteractive =
+    path === "/auth/login" || path === "/auth/register";
+  if (user && estPageAuthInteractive) {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";
     return NextResponse.redirect(url);
