@@ -212,6 +212,16 @@ CREATE TABLE propositions (
 
 **010** — pont `evenements → declencheurs` (US-B3) : backfill + trigger `AFTER` **défensif** (synchro non bloquante pour l'écriture sur `evenements`). Le workflow N8n générique lit `declencheurs` ; `evenements` reste la source de vérité du calcul des dates. Les workflows spécialisés restent en fallback.
 
+### Matching v2 — Tranche 1 : infra & enrichissement (migrations 011-012)
+
+Découpage en 3 tranches (cf. Specs_Matching_v2). **Seule la Tranche 1 est faite** : infra + enrichissement du catalogue, **impact utilisateur nul** (le matching par tags reste seul actif). Tranches 2 (matching embeddings en parallèle) et 3 (onboarding v2 + bascule) à venir, cadrées séparément.
+
+**011** — `CREATE EXTENSION vector` (pgvector) + colonnes `produits` : `description_matching text` (description-pivot orientée destinataire), `embedding vector(1536)`, `score_originalite int CHECK 1-5`, `tranche_age text`, `occasions text[]`. Additif.
+
+**012** — index `HNSW (embedding vector_cosine_ops)`, posé après le chargement des embeddings.
+
+**ELT** : `scripts/enrich-catalogue.mjs` (Node, `fetch`, zéro dépendance) — outil de dev qui, pour chaque produit, génère via OpenAI (`gpt-4o-mini`) la `description_matching` (angle d'attaque rotatif pour diversifier les formulations → éviter la similarité vectorielle parasite) + attributs, puis l'`embedding` (`text-embedding-3-small`). Idempotent. Secrets : `OPENAI_API_KEY`, `LLM_PROVIDER` dans `.env.local`. Le matching v2 ne consomme pas encore ces colonnes (Tranche 2).
+
 ---
 
 ## 4. Algorithme de matching (Edge Function)

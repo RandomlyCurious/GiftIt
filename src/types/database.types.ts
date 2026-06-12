@@ -39,6 +39,51 @@ export type Database = {
   }
   public: {
     Tables: {
+      declencheurs: {
+        Row: {
+          actif: boolean | null
+          created_at: string | null
+          evenement_id: string | null
+          id: string
+          proche_id: string
+          regle_temporelle: Json | null
+          type: string
+        }
+        Insert: {
+          actif?: boolean | null
+          created_at?: string | null
+          evenement_id?: string | null
+          id?: string
+          proche_id: string
+          regle_temporelle?: Json | null
+          type: string
+        }
+        Update: {
+          actif?: boolean | null
+          created_at?: string | null
+          evenement_id?: string | null
+          id?: string
+          proche_id?: string
+          regle_temporelle?: Json | null
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "declencheurs_evenement_id_fkey"
+            columns: ["evenement_id"]
+            isOneToOne: false
+            referencedRelation: "evenements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "declencheurs_proche_id_fkey"
+            columns: ["proche_id"]
+            isOneToOne: false
+            referencedRelation: "proches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       evenements: {
         Row: {
           actif: boolean | null
@@ -70,6 +115,51 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "evenements_proche_id_fkey"
+            columns: ["proche_id"]
+            isOneToOne: false
+            referencedRelation: "proches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      interactions: {
+        Row: {
+          created_at: string | null
+          date: string | null
+          declencheur_id: string | null
+          id: string
+          proche_id: string
+          statut: string
+          type_suggestion: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          date?: string | null
+          declencheur_id?: string | null
+          id?: string
+          proche_id: string
+          statut?: string
+          type_suggestion?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          date?: string | null
+          declencheur_id?: string | null
+          id?: string
+          proche_id?: string
+          statut?: string
+          type_suggestion?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "interactions_declencheur_id_fkey"
+            columns: ["declencheur_id"]
+            isOneToOne: false
+            referencedRelation: "declencheurs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "interactions_proche_id_fkey"
             columns: ["proche_id"]
             isOneToOne: false
             referencedRelation: "proches"
@@ -200,11 +290,16 @@ export type Database = {
           categorie: string
           created_at: string | null
           description: string | null
+          description_matching: string | null
+          embedding: string | null
           id: string
           nb_tags: number | null
           nom: string
+          occasions: string[] | null
           prix_max: number | null
           prix_min: number | null
+          score_originalite: number | null
+          tranche_age: string | null
           url_image: string | null
           url_produit: string
         }
@@ -214,11 +309,16 @@ export type Database = {
           categorie: string
           created_at?: string | null
           description?: string | null
+          description_matching?: string | null
+          embedding?: string | null
           id?: string
           nb_tags?: number | null
           nom: string
+          occasions?: string[] | null
           prix_max?: number | null
           prix_min?: number | null
+          score_originalite?: number | null
+          tranche_age?: string | null
           url_image?: string | null
           url_produit: string
         }
@@ -228,11 +328,16 @@ export type Database = {
           categorie?: string
           created_at?: string | null
           description?: string | null
+          description_matching?: string | null
+          embedding?: string | null
           id?: string
           nb_tags?: number | null
           nom?: string
+          occasions?: string[] | null
           prix_max?: number | null
           prix_min?: number | null
+          score_originalite?: number | null
+          tranche_age?: string | null
           url_image?: string | null
           url_produit?: string
         }
