@@ -39,6 +39,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      config_audace: {
+        Row: {
+          created_at: string | null
+          id: string
+          nb_equilibre: number
+          nb_valeur_sure: number
+          nb_wildcard: number
+          position_max: number
+          position_min: number
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          nb_equilibre: number
+          nb_valeur_sure: number
+          nb_wildcard: number
+          position_max: number
+          position_min: number
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          nb_equilibre?: number
+          nb_valeur_sure?: number
+          nb_wildcard?: number
+          position_max?: number
+          position_min?: number
+        }
+        Relationships: []
+      }
       declencheurs: {
         Row: {
           actif: boolean | null
@@ -206,6 +236,7 @@ export type Database = {
           calibre: boolean | null
           created_at: string | null
           date_naissance: string
+          embedding: string | null
           id: string
           nb_swipes: number | null
           nom: string | null
@@ -220,6 +251,7 @@ export type Database = {
           calibre?: boolean | null
           created_at?: string | null
           date_naissance: string
+          embedding?: string | null
           id?: string
           nb_swipes?: number | null
           nom?: string | null
@@ -234,6 +266,7 @@ export type Database = {
           calibre?: boolean | null
           created_at?: string | null
           date_naissance?: string
+          embedding?: string | null
           id?: string
           nb_swipes?: number | null
           nom?: string | null
