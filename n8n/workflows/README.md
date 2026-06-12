@@ -10,11 +10,21 @@ Responsable : **Agent Backend**.
 
 ## Les 3 workflows
 
-| Fichier | Rôle | Sélection |
+| Fichier | Rôle | Source |
 |---|---|---|
-| `envoi-propositions.json` | **Générique — le cœur.** Tous types d'événements. | `evenements` actifs, tous types, dates calculées par type |
-| `rappel-anniversaire.json` | Spécialisation : anniversaires uniquement. | `type = anniversaire` |
-| `rappel-noel.json` | Spécialisation : Noël uniquement. | `type = noel` |
+| `envoi-propositions.json` | **Générique — le cœur (US-B3).** Tous types. | Table générique **`declencheurs`** (`type=evenement`, actifs), événement embarqué |
+| `rappel-anniversaire.json` | Spécialisation : anniversaires uniquement. *(fallback, inchangé)* | `evenements` `type = anniversaire` |
+| `rappel-noel.json` | Spécialisation : Noël uniquement. *(fallback, inchangé)* | `evenements` `type = noel` |
+
+> 🔁 **US-B3 (moteur découplé)** : le workflow générique lit désormais la table générique
+> `declencheurs` au lieu de `evenements` directement. Pour le type `evenement`, le déclencheur
+> porte l'événement embarqué → le calcul de date reste **strictement identique** (CLAUDE.md §8).
+> Au MVP, seuls des déclencheurs `type='evenement'` existent (parité vérifiée vs l'ancienne
+> source). Cela prépare l'arrivée de déclencheurs `attention`/`pro` **sans réécrire la logique
+> d'envoi**. Les deux spécialisations restent sur `evenements` comme **fallback** réversible.
+>
+> ⏱️ **US-A1 (fréquence)** : le Code node ne déclenche un jalon (J-30/J-14/J-7) que s'il figure
+> dans `evenements.frequence` (ex. `j30_j14_j7`, `j14_j7`, `j7`). Défaut = les trois rappels.
 
 > **Relation entre les workflows.** `envoi-propositions.json` couvre **tous** les types.
 > `rappel-anniversaire.json` et `rappel-noel.json` en sont des **spécialisations** (un seul type),
@@ -24,13 +34,15 @@ Responsable : **Agent Backend**.
 > des e-mails en double. Choisissez **soit** le générique seul, **soit** l'ensemble des
 > spécialisations par type.
 
-### Pipeline commun (identique dans les 3)
+### Pipeline commun
 
 ```
 Cron 8h00
-  → Supabase GET /rest/v1/evenements (actifs [+ filtre type])      [HTTP Request]
-  → Éclater le tableau en 1 item par événement                     [Split Out]
-  → Calcul de la prochaine date + filtre J-30 / J-14 / J-7         [Code node]
+  → Supabase GET source                                            [HTTP Request]
+      • générique : /rest/v1/declencheurs?type=eq.evenement&actif=eq.true (événement embarqué)
+      • spécialisations (fallback) : /rest/v1/evenements (actifs + filtre type)
+  → Éclater le tableau en 1 item                                   [Split Out]
+  → Prochaine date + filtre J-30/J-14/J-7 + respect de `frequence` [Code node]
   → POST /functions/v1/matching  → 5 propositions { produit_id, score }  [HTTP Request]
   → Supabase GET /rest/v1/produits?id=in.(...)  → nom, prix, url    [HTTP Request]
   → POST /rest/v1/rpc/email_utilisateur { uid: user_id }  → e-mail   [HTTP Request]

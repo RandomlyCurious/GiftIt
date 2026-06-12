@@ -201,6 +201,17 @@ CREATE TABLE propositions (
 );
 ```
 
+### Évolutions v3 — migrations 008-010 (additif, non destructif)
+
+**008** — colonnes : `evenements.frequence text` (US-A1, défaut `'j30_j14_j7'`) ; `propositions.offert boolean` + `propositions.offert_le date` (US-A3) ; `propositions.retour_satisfaction smallint CHECK IN (1,2,3)` (US-A4). `choisie` inchangée.
+
+**009** — tables génériques `[FONDATION]` :
+- `declencheurs(id, proche_id, type IN ('evenement','attention','pro'), evenement_id FK nullable, regle_temporelle jsonb, actif, created_at)` — modèle de déclencheur générique (US-B1).
+- `interactions(id, proche_id, declencheur_id, type_suggestion, statut IN ('propose','vu','agi','ignore'), date, created_at)` (US-B2).
+- RLS par propriété du proche sur les deux.
+
+**010** — pont `evenements → declencheurs` (US-B3) : backfill + trigger `AFTER` **défensif** (synchro non bloquante pour l'écriture sur `evenements`). Le workflow N8n générique lit `declencheurs` ; `evenements` reste la source de vérité du calcul des dates. Les workflows spécialisés restent en fallback.
+
 ---
 
 ## 4. Algorithme de matching (Edge Function)
