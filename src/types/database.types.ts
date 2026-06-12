@@ -44,6 +44,7 @@ export type Database = {
           actif: boolean | null
           created_at: string | null
           date_fixe: string | null
+          frequence: string | null
           id: string
           proche_id: string
           type: string
@@ -52,6 +53,7 @@ export type Database = {
           actif?: boolean | null
           created_at?: string | null
           date_fixe?: string | null
+          frequence?: string | null
           id?: string
           proche_id: string
           type: string
@@ -60,6 +62,7 @@ export type Database = {
           actif?: boolean | null
           created_at?: string | null
           date_fixe?: string | null
+          frequence?: string | null
           id?: string
           proche_id?: string
           type?: string
@@ -263,8 +266,11 @@ export type Database = {
           envoyee_le: string | null
           evenement_id: string
           id: string
+          offert: boolean | null
+          offert_le: string | null
           proche_id: string
           produit_id: string
+          retour_satisfaction: number | null
           score: number
         }
         Insert: {
@@ -273,8 +279,11 @@ export type Database = {
           envoyee_le?: string | null
           evenement_id: string
           id?: string
+          offert?: boolean | null
+          offert_le?: string | null
           proche_id: string
           produit_id: string
+          retour_satisfaction?: number | null
           score: number
         }
         Update: {
@@ -283,8 +292,11 @@ export type Database = {
           envoyee_le?: string | null
           evenement_id?: string
           id?: string
+          offert?: boolean | null
+          offert_le?: string | null
           proche_id?: string
           produit_id?: string
+          retour_satisfaction?: number | null
           score?: number
         }
         Relationships: [

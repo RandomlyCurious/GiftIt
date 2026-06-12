@@ -1,6 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, CalendarHeart, CheckCircle2, Gift, Sparkles } from "lucide-react";
+import {
+  ArrowLeft,
+  CheckCircle2,
+  Gift,
+  History,
+  Sparkles,
+} from "lucide-react";
 import { createClient } from "@/lib/supabase-server";
 import { buttonVariants } from "@/components/ui/button";
 import {
@@ -9,7 +15,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { libelleEvenement, prochaineDateEvenement } from "@/lib/evenements";
+import { prochaineDateEvenement, libelleEvenement } from "@/lib/evenements";
+import { FrequenceEvenement } from "@/components/FrequenceEvenement";
 
 const LIBELLE_RELATION: Record<string, string> = {
   conjoint: "Conjoint·e",
@@ -33,7 +40,7 @@ export default async function FicheProchePage({
   const { data: proche, error } = await supabase
     .from("proches")
     .select(
-      "*, proche_tags(tag_slug, tags(libelle)), evenements(id, type, actif, date_fixe)",
+      "*, proche_tags(tag_slug, tags(libelle)), evenements(id, type, actif, date_fixe, frequence)",
     )
     .eq("id", params.id)
     .single();
@@ -133,13 +140,22 @@ export default async function FicheProchePage({
                 </span>
                 .
               </p>
-              <Link
-                href={`/proches/${proche.id}/propositions?evenement=${prochainEvenement.ev.id}`}
-                className={buttonVariants({ size: "sm" })}
-              >
-                <Gift className="h-4 w-4" />
-                Voir des idées cadeaux
-              </Link>
+              <div className="flex flex-wrap gap-2">
+                <Link
+                  href={`/proches/${proche.id}/propositions?evenement=${prochainEvenement.ev.id}`}
+                  className={buttonVariants({ size: "sm" })}
+                >
+                  <Gift className="h-4 w-4" />
+                  Voir des idées cadeaux
+                </Link>
+                <Link
+                  href={`/proches/${proche.id}/historique`}
+                  className={buttonVariants({ size: "sm", variant: "outline" })}
+                >
+                  <History className="h-4 w-4" />
+                  Historique
+                </Link>
+              </div>
             </>
           ) : (
             <>
@@ -147,13 +163,22 @@ export default async function FicheProchePage({
                 Aucun événement actif. Ajoutez-en un pour générer des idées
                 cadeaux au bon moment.
               </p>
-              <span
-                aria-disabled="true"
-                className={buttonVariants({ size: "sm", variant: "outline" }) + " pointer-events-none opacity-50"}
-              >
-                <Gift className="h-4 w-4" />
-                Voir des idées cadeaux
-              </span>
+              <div className="flex flex-wrap gap-2">
+                <span
+                  aria-disabled="true"
+                  className={buttonVariants({ size: "sm", variant: "outline" }) + " pointer-events-none opacity-50"}
+                >
+                  <Gift className="h-4 w-4" />
+                  Voir des idées cadeaux
+                </span>
+                <Link
+                  href={`/proches/${proche.id}/historique`}
+                  className={buttonVariants({ size: "sm", variant: "outline" })}
+                >
+                  <History className="h-4 w-4" />
+                  Historique
+                </Link>
+              </div>
             </>
           )}
         </CardContent>
@@ -182,20 +207,23 @@ export default async function FicheProchePage({
         </CardContent>
       </Card>
 
-      {/* Événements */}
+      {/* Événements — avec choix de la fréquence de rappel (US-A1) */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Événements</CardTitle>
+          <CardTitle className="text-base">Événements &amp; rappels</CardTitle>
         </CardHeader>
         <CardContent>
           {proche.evenements.length === 0 ? (
             <p className="text-sm text-muted-foreground">Aucun événement enregistré.</p>
           ) : (
-            <ul className="space-y-2">
+            <ul className="space-y-3">
               {proche.evenements.map((ev) => (
-                <li key={ev.id} className="flex items-center gap-2 text-sm">
-                  <CalendarHeart className="h-4 w-4 text-primary" />
-                  {libelleEvenement(ev.type)}
+                <li key={ev.id}>
+                  <FrequenceEvenement
+                    evenementId={ev.id}
+                    type={ev.type}
+                    frequence={ev.frequence}
+                  />
                 </li>
               ))}
             </ul>
