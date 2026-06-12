@@ -25,24 +25,43 @@
       "name": "Chaque matin 8h00",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [-160, 300]
+      "position": [
+        -160,
+        300
+      ]
     },
     {
       "parameters": {
         "method": "GET",
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/evenements",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/declencheurs",
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
-            { "name": "select", "value": "id,type,date_fixe,actif,proche_id,proches(id,prenom,nom,date_naissance,user_id,profils(prenom,nom))" },
-            { "name": "actif", "value": "eq.true" }
+            {
+              "name": "select",
+              "value": "id,type,actif,evenement_id,evenements(id,type,date_fixe,actif,frequence,proche_id,proches(id,prenom,nom,date_naissance,user_id,profils(prenom,nom)))"
+            },
+            {
+              "name": "actif",
+              "value": "eq.true"
+            },
+            {
+              "name": "type",
+              "value": "eq.evenement"
+            }
           ]
         },
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
-            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" }
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            }
           ]
         },
         "options": {}
@@ -51,7 +70,10 @@
       "name": "Supabase — événements actifs",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [60, 300]
+      "position": [
+        60,
+        300
+      ]
     },
     {
       "parameters": {
@@ -62,17 +84,23 @@
       "name": "Éclater les événements",
       "type": "n8n-nodes-base.splitOut",
       "typeVersion": 1,
-      "position": [280, 300]
+      "position": [
+        280,
+        300
+      ]
     },
     {
       "parameters": {
-        "jsCode": "// =========================================================================\n// Calcul de la prochaine date de chaque événement + filtre J-30 / J-14 / J-7.\n// -------------------------------------------------------------------------\n// Pour CHAQUE événement reçu, on calcule sa prochaine occurrence selon son\n// type (cf. CLAUDE.md §8) :\n//   - anniversaire : prochain jour/mois de `proches.date_naissance`.\n//   - noel : 25 décembre.\n//   - saint_valentin : 14 février.\n//   - fete_meres : dernier dimanche de mai (règle FR ; report au 1er dim. de\n//     juin si coïncide avec la Pentecôte — non géré ici, simplifié au dernier\n//     dimanche de mai pour le MVP). Voir NOTE plus bas.\n//   - fete_peres : 3e dimanche de juin.\n//   - fete_grands_parents : 1er dimanche d'octobre.\n//   - autre : `evenements.date_fixe` (prochaine occurrence si déjà passée).\n//\n// On ne garde que les événements dont le nombre de jours restants vaut\n// exactement 30, 14 ou 7. On enrichit chaque item conservé avec joursRestants\n// et la date calculée, pour la suite du workflow.\n//\n// NOTE règle fêtes mobiles : le CdC §8 dit \"1er dimanche de juin\" pour la fête\n// des mères. On suit STRICTEMENT le CLAUDE.md ici (1er dimanche de juin) pour\n// rester fidèle à la spec ; ajuster si la règle légale FR (dernier dim. de mai)\n// est préférée.\n// =========================================================================\n\nconst SEUILS = [30, 14, 7];\n\n// Date du jour à minuit (heure locale du serveur n8n).\nconst aujourdhui = new Date();\naujourdhui.setHours(0, 0, 0, 0);\n\n// Renvoie le N-ième (1-indexé) dimanche d'un mois donné (mois 0-indexé).\nfunction niemeDimanche(annee, mois, n) {\n  const premier = new Date(annee, mois, 1);\n  const decalage = (7 - premier.getDay()) % 7; // jours jusqu'au 1er dimanche\n  const jour = 1 + decalage + (n - 1) * 7;\n  return new Date(annee, mois, jour);\n}\n\n// Construit une date \"prochaine occurrence\" sur jour/mois fixes : si déjà\n// passée cette année, on bascule sur l'année suivante.\nfunction prochaineOccurrence(mois, jour) {\n  const annee = aujourdhui.getFullYear();\n  let d = new Date(annee, mois, jour);\n  d.setHours(0, 0, 0, 0);\n  if (d < aujourdhui) d = new Date(annee + 1, mois, jour);\n  return d;\n}\n\nfunction prochainDimancheCalcule(calculer) {\n  const annee = aujourdhui.getFullYear();\n  let d = calculer(annee);\n  d.setHours(0, 0, 0, 0);\n  if (d < aujourdhui) d = calculer(annee + 1);\n  return d;\n}\n\nfunction dateProchaineOccurrence(ev) {\n  switch (ev.type) {\n    case 'anniversaire': {\n      const dn = new Date(ev.proches.date_naissance);\n      return prochaineOccurrence(dn.getMonth(), dn.getDate());\n    }\n    case 'noel':\n      return prochaineOccurrence(11, 25); // 25 décembre\n    case 'saint_valentin':\n      return prochaineOccurrence(1, 14); // 14 février\n    case 'fete_meres':\n      return prochainDimancheCalcule((a) => niemeDimanche(a, 5, 1)); // 1er dim. juin\n    case 'fete_peres':\n      return prochainDimancheCalcule((a) => niemeDimanche(a, 5, 3)); // 3e dim. juin\n    case 'fete_grands_parents':\n      return prochainDimancheCalcule((a) => niemeDimanche(a, 9, 1)); // 1er dim. octobre\n    case 'autre': {\n      if (!ev.date_fixe) return null;\n      const df = new Date(ev.date_fixe);\n      return prochaineOccurrence(df.getMonth(), df.getDate());\n    }\n    default:\n      return null;\n  }\n}\n\nconst MS_PAR_JOUR = 1000 * 60 * 60 * 24;\nconst sortie = [];\n\nfor (const item of $input.all()) {\n  const ev = item.json;\n  const dateEv = dateProchaineOccurrence(ev);\n  if (!dateEv) continue;\n\n  const joursRestants = Math.round((dateEv - aujourdhui) / MS_PAR_JOUR);\n  if (!SEUILS.includes(joursRestants)) continue;\n\n  sortie.push({\n    json: {\n      ...ev,\n      jours_restants: joursRestants,\n      date_evenement: dateEv.toISOString().slice(0, 10),\n    },\n  });\n}\n\nreturn sortie;"
+        "jsCode": "// =========================================================================\n// US-B3 : source découplée du type d'événement.\n// On lit la table générique `declencheurs` (type='evenement', actif) ; chaque\n// déclencheur porte l'événement embarqué -> on délègue le calcul de date à la\n// logique existante (CLAUDE.md §8), strictement inchangée. Au MVP, seuls des\n// déclencheurs type 'evenement' existent : l'ensemble traité est identique à\n// l'ancienne source `evenements` (parité vérifiée).\n//\n// US-A1 : on respecte la fréquence choisie par l'utilisateur\n// (evenements.frequence, ex 'j30_j14_j7') : un jalon n'est émis que s'il y figure.\n// =========================================================================\n\nconst SEUILS = [30, 14, 7];\n\nconst aujourdhui = new Date();\naujourdhui.setHours(0, 0, 0, 0);\n\nfunction niemeDimanche(annee, mois, n) {\n  const premier = new Date(annee, mois, 1);\n  const decalage = (7 - premier.getDay()) % 7;\n  const jour = 1 + decalage + (n - 1) * 7;\n  return new Date(annee, mois, jour);\n}\n\nfunction prochaineOccurrence(mois, jour) {\n  const annee = aujourdhui.getFullYear();\n  let d = new Date(annee, mois, jour);\n  d.setHours(0, 0, 0, 0);\n  if (d < aujourdhui) d = new Date(annee + 1, mois, jour);\n  return d;\n}\n\nfunction prochainDimancheCalcule(calculer) {\n  const annee = aujourdhui.getFullYear();\n  let d = calculer(annee);\n  d.setHours(0, 0, 0, 0);\n  if (d < aujourdhui) d = calculer(annee + 1);\n  return d;\n}\n\nfunction dateProchaineOccurrence(ev) {\n  switch (ev.type) {\n    case 'anniversaire': {\n      const dn = new Date(ev.proches.date_naissance);\n      return prochaineOccurrence(dn.getMonth(), dn.getDate());\n    }\n    case 'noel':\n      return prochaineOccurrence(11, 25);\n    case 'saint_valentin':\n      return prochaineOccurrence(1, 14);\n    case 'fete_meres':\n      return prochainDimancheCalcule((a) => niemeDimanche(a, 5, 1));\n    case 'fete_peres':\n      return prochainDimancheCalcule((a) => niemeDimanche(a, 5, 3));\n    case 'fete_grands_parents':\n      return prochainDimancheCalcule((a) => niemeDimanche(a, 9, 1));\n    case 'autre': {\n      if (!ev.date_fixe) return null;\n      const df = new Date(ev.date_fixe);\n      return prochaineOccurrence(df.getMonth(), df.getDate());\n    }\n    default:\n      return null;\n  }\n}\n\nconst MS_PAR_JOUR = 1000 * 60 * 60 * 24;\nconst sortie = [];\n\nfor (const item of $input.all()) {\n  const decl = item.json;\n  const ev = decl.evenements; // événement embarqué via le déclencheur\n  if (!ev || ev.actif === false) continue;\n\n  const dateEv = dateProchaineOccurrence(ev);\n  if (!dateEv) continue;\n\n  const joursRestants = Math.round((dateEv - aujourdhui) / MS_PAR_JOUR);\n  if (!SEUILS.includes(joursRestants)) continue;\n\n  // US-A1 : la fréquence de l'événement doit inclure ce jalon (j30/j14/j7).\n  const frequence = ev.frequence || 'j30_j14_j7';\n  const jalon = 'j' + joursRestants;\n  if (!frequence.split('_').includes(jalon)) continue;\n\n  sortie.push({\n    json: {\n      ...ev,\n      declencheur_id: decl.id, // pour journaliser dans interactions (à venir)\n      jours_restants: joursRestants,\n      date_evenement: dateEv.toISOString().slice(0, 10),\n    },\n  });\n}\n\nreturn sortie;\n"
       },
       "id": "filtre-dates",
       "name": "Filtre J-30 / J-14 / J-7",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [500, 300]
+      "position": [
+        500,
+        300
+      ]
     },
     {
       "parameters": {
@@ -81,8 +109,14 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
-            { "name": "Content-Type", "value": "application/json" }
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
           ]
         },
         "sendBody": true,
@@ -94,7 +128,10 @@
       "name": "Edge Function matching",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [720, 300]
+      "position": [
+        720,
+        300
+      ]
     },
     {
       "parameters": {
@@ -103,15 +140,27 @@
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
-            { "name": "select", "value": "id,nom,prix_min,prix_max,url_produit,url_image" },
-            { "name": "id", "value": "=in.({{ ($json.propositions || []).map(p => p.produit_id).join(',') }})" }
+            {
+              "name": "select",
+              "value": "id,nom,prix_min,prix_max,url_produit,url_image"
+            },
+            {
+              "name": "id",
+              "value": "=in.({{ ($json.propositions || []).map(p => p.produit_id).join(',') }})"
+            }
           ]
         },
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
-            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" }
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            }
           ]
         },
         "options": {}
@@ -120,7 +169,10 @@
       "name": "Supabase — détails produits",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [940, 300]
+      "position": [
+        940,
+        300
+      ]
     },
     {
       "parameters": {
@@ -129,9 +181,18 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
-            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
-            { "name": "Content-Type", "value": "application/json" }
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
           ]
         },
         "sendBody": true,
@@ -143,7 +204,10 @@
       "name": "Supabase — e-mail utilisateur (RPC)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1050, 300]
+      "position": [
+        1050,
+        300
+      ]
     },
     {
       "parameters": {
@@ -153,18 +217,29 @@
       "name": "Composer e-mail + log",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1160, 300]
+      "position": [
+        1160,
+        300
+      ]
     },
     {
       "parameters": {
         "conditions": {
-          "options": { "caseSensitive": true, "typeValidation": "strict", "version": 2 },
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "version": 2
+          },
           "conditions": [
             {
               "id": "a-envoyer",
               "leftValue": "={{ $json.a_envoyer }}",
               "rightValue": true,
-              "operator": { "type": "boolean", "operation": "true", "singleValue": true }
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
             }
           ],
           "combinator": "and"
@@ -175,7 +250,10 @@
       "name": "Au moins 1 proposition ?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
-      "position": [1380, 300]
+      "position": [
+        1380,
+        300
+      ]
     },
     {
       "parameters": {
@@ -184,8 +262,14 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "Authorization", "value": "=Bearer {{ $env.RESEND_API_KEY }}" },
-            { "name": "Content-Type", "value": "application/json" }
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.RESEND_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
           ]
         },
         "sendBody": true,
@@ -197,7 +281,10 @@
       "name": "Resend — envoi e-mail",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1600, 220]
+      "position": [
+        1600,
+        220
+      ]
     },
     {
       "parameters": {
@@ -206,10 +293,22 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
-            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
-            { "name": "Content-Type", "value": "application/json" },
-            { "name": "Prefer", "value": "return=minimal" }
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
           ]
         },
         "sendBody": true,
@@ -221,42 +320,123 @@
       "name": "Supabase — log propositions",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1820, 220]
+      "position": [
+        1820,
+        220
+      ]
     }
   ],
   "connections": {
     "Chaque matin 8h00": {
-      "main": [[{ "node": "Supabase — événements actifs", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Supabase — événements actifs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Supabase — événements actifs": {
-      "main": [[{ "node": "Éclater les événements", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Éclater les événements",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Éclater les événements": {
-      "main": [[{ "node": "Filtre J-30 / J-14 / J-7", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Filtre J-30 / J-14 / J-7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Filtre J-30 / J-14 / J-7": {
-      "main": [[{ "node": "Edge Function matching", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Edge Function matching",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Edge Function matching": {
-      "main": [[{ "node": "Supabase — détails produits", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Supabase — détails produits",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Supabase — détails produits": {
-      "main": [[{ "node": "Supabase — e-mail utilisateur (RPC)", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Supabase — e-mail utilisateur (RPC)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Supabase — e-mail utilisateur (RPC)": {
-      "main": [[{ "node": "Composer e-mail + log", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Composer e-mail + log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Composer e-mail + log": {
-      "main": [[{ "node": "Au moins 1 proposition ?", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Au moins 1 proposition ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Au moins 1 proposition ?": {
       "main": [
-        [{ "node": "Resend — envoi e-mail", "type": "main", "index": 0 }],
+        [
+          {
+            "node": "Resend — envoi e-mail",
+            "type": "main",
+            "index": 0
+          }
+        ],
         []
       ]
     },
     "Resend — envoi e-mail": {
-      "main": [[{ "node": "Supabase — log propositions", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Supabase — log propositions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   }
 }
