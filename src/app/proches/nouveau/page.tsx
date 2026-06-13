@@ -50,6 +50,11 @@ export default function NouveauProchePage() {
   const [relation, setRelation] = useState("ami");
   const [adresse, setAdresse] = useState("");
 
+  // Onboarding v2 : portrait libre (source du matching sémantique), budget, audace.
+  const [description, setDescription] = useState("");
+  const [budgetType, setBudgetType] = useState("50");
+  const [audace, setAudace] = useState(50);
+
   // Sélections multiples.
   const [tags, setTags] = useState<Tag[]>([]);
   const [tagsSelectionnes, setTagsSelectionnes] = useState<string[]>([]);
@@ -108,6 +113,9 @@ export default function NouveauProchePage() {
         date_naissance: dateNaissance,
         relation,
         adresse: adresse || null,
+        description_libre: description || null,
+        budget_type: budgetType,
+        audace,
       })
       .select()
       .single();
@@ -150,6 +158,15 @@ export default function NouveauProchePage() {
         setChargement(false);
         return;
       }
+    }
+
+    // 4. Profil sémantique (matching v2) : si un portrait libre est fourni, on
+    //    génère intérêts/anti-goûts + embedding via extract-profil. Non bloquant.
+    if (description.trim()) {
+      const { error: erreurProfil } = await supabase.functions.invoke("extract-profil", {
+        body: { proche_id: proche.id },
+      });
+      if (erreurProfil) console.error(erreurProfil);
     }
 
     // On enchaîne sur la calibration par swipe.
@@ -273,6 +290,52 @@ export default function NouveauProchePage() {
                     </button>
                   );
                 })}
+              </div>
+            </div>
+
+            {/* Portrait libre — source principale du matching v2 */}
+            <div className="space-y-1.5">
+              <Label htmlFor="description">Portrait libre</Label>
+              <textarea
+                id="description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                rows={4}
+                placeholder="Décris ce proche comme à un ami : ses goûts, sa personnalité, ce qu'il/elle adore… et ce qu'il/elle déteste. Ex : « Adore la cuisine du terroir et recevoir, mais déteste les gadgets électroniques. »"
+                className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+              <p className="text-xs text-muted-foreground">
+                Plus c&apos;est riche (et explicite sur les anti-goûts), meilleures sont les idées.
+              </p>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="budget">Budget</Label>
+                <select
+                  id="budget"
+                  value={budgetType}
+                  onChange={(e) => setBudgetType(e.target.value)}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <option value="20">≈ 20 €</option>
+                  <option value="50">≈ 50 €</option>
+                  <option value="150">≈ 150 €</option>
+                  <option value="nolimit">Sans limite</option>
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="audace">Audace : {audace}/100</Label>
+                <input
+                  id="audace"
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={audace}
+                  onChange={(e) => setAudace(Number(e.target.value))}
+                  className="w-full accent-primary"
+                />
+                <p className="text-xs text-muted-foreground">😴 classique ←→ 🎢 audacieux</p>
               </div>
             </div>
 

@@ -11,15 +11,22 @@ import type { Database } from "@/types/database.types";
 
 type Produit = Database["public"]["Tables"]["produits"]["Row"];
 
-// Une proposition = un produit + son score de matching.
-type Proposition = { produit: Produit; score: number };
+// Une proposition = un produit + son score + (v2) une justification.
+type Proposition = { produit: Produit; score: number; justification?: string | null };
 
-// Forme du retour de l'Edge Function `matching` (CLAUDE.md §4).
+// Retour du matching tags (CLAUDE.md §4) — moteur de repli.
 type RetourMatching = {
   propositions?: { produit_id: string; score: number }[];
-  // Selon le cas, l'Edge Function peut signaler un proche non calibré.
-  calibre?: boolean;
-  message?: string;
+};
+
+// Retour du moteur v2 (generate-panel) : score + justification incarnée.
+type RetourPanel = {
+  propositions?: {
+    produit_id: string;
+    score: number;
+    justification?: string | null;
+    slot?: string | null;
+  }[];
 };
 
 export default function PropositionsPage() {
@@ -49,24 +56,33 @@ export default function PropositionsPage() {
     setErreur(null);
     setAvertissement(null);
 
-    // 1. Génération des propositions par l'Edge Function (JWT joint automatiquement).
-    const { data, error } = await supabase.functions.invoke<RetourMatching>("matching", {
+    // 1. Moteur v2 (generate-panel) avec REPLI sur le matching tags si v2
+    //    échoue ou ne renvoie rien (ex. proche sans profil sémantique).
+    let brutes: { produit_id: string; score: number; justification?: string | null }[] = [];
+    const v2 = await supabase.functions.invoke<RetourPanel>("generate-panel", {
       body: { proche_id: procheId, evenement_id: evenementId, nb_propositions: 5 },
     });
-    if (error) {
-      console.error(error);
-      setErreur("Impossible de générer des propositions pour le moment.");
-      setChargement(false);
-      return;
+    if (!v2.error && (v2.data?.propositions?.length ?? 0) > 0) {
+      brutes = v2.data!.propositions!;
+    } else {
+      if (v2.error) console.error("generate-panel:", v2.error);
+      const tags = await supabase.functions.invoke<RetourMatching>("matching", {
+        body: { proche_id: procheId, evenement_id: evenementId, nb_propositions: 5 },
+      });
+      if (tags.error) {
+        console.error(tags.error);
+        setErreur("Impossible de générer des propositions pour le moment.");
+        setChargement(false);
+        return;
+      }
+      brutes = tags.data?.propositions ?? [];
+      if (brutes.length > 0) {
+        setAvertissement(
+          "Idées basées sur les tags (profil sémantique indisponible pour ce proche).",
+        );
+      }
     }
 
-    if (data?.calibre === false) {
-      setAvertissement(
-        "Ce proche n'est pas encore calibré (moins de 5 swipes). Les propositions ci-dessous restent approximatives.",
-      );
-    }
-
-    const brutes = data?.propositions ?? [];
     if (brutes.length === 0) {
       setPropositions([]);
       setChargement(false);
@@ -86,10 +102,17 @@ export default function PropositionsPage() {
       return;
     }
 
-    // 3. On associe chaque produit à son score, puis on trie par score décroissant.
-    const scoreParId = new Map(brutes.map((p) => [p.produit_id, p.score]));
+    // 3. Association score + justification, tri par score décroissant.
+    const infoParId = new Map(brutes.map((p) => [p.produit_id, p]));
     const liste: Proposition[] = (produits ?? [])
-      .map((produit) => ({ produit, score: scoreParId.get(produit.id) ?? 0 }))
+      .map((produit) => {
+        const info = infoParId.get(produit.id);
+        return {
+          produit,
+          score: info?.score ?? 0,
+          justification: info?.justification ?? null,
+        };
+      })
       .sort((a, b) => b.score - a.score);
 
     setPropositions(liste);
@@ -180,11 +203,12 @@ export default function PropositionsPage() {
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {propositions.map(({ produit, score }) => (
+          {propositions.map(({ produit, score, justification }) => (
             <PropositionCard
               key={produit.id}
               produit={produit}
               score={score}
+              justification={justification}
               choisie={choisis.has(produit.id)}
               onChoisir={handleChoisir}
               enregistrement={enregistrement === produit.id}

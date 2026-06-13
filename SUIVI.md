@@ -8,8 +8,8 @@
 
 ## 🎯 Priorités en cours (ordre demandé)
 
-1. **Matching V2 — tous les points** (Tranches 2 puis 3) — _à venir_
-2. **Modifier / supprimer un proche** — _à venir_
+1. ~~Matching V2 — tous les points (Tranches 1-2-3)~~ — ✅ **TERMINÉ** (v2 branché, repli tags)
+2. **Modifier / supprimer un proche** — _prochaine priorité_
 
 ---
 
@@ -67,9 +67,9 @@
 | Fallback tags manuels / vecteur appris | ✅ |
 | **Matching V2 — Tranche 1** (infra pgvector + enrichissement) | ✅ |
 | **Matching V2 — Tranche 2** (moteur `generate-panel` en parallèle + comparaison) | ✅ (construit & comparé, **pas branché**) |
-| Matching V2 — Tranche 3 — backend (extract-profil, budget, description→reranker) | ✅ (construit) |
-| Matching V2 — Tranche 3 — onboarding UI + **bascule** | 🟡 (gate passé, **verdict bascule en attente**) |
+| **Matching V2 — Tranche 3** (onboarding description/budget/audace, extract-profil, **bascule** generate-panel) | ✅ (gpt-4o-mini en prod, repli tags) |
 | config_audace / composition portefeuille / justifications | ✅ (via generate-panel) |
+| **Le matching de l'app = embeddings + reranking LLM** (repli tags si pas de profil sémantique) | ✅ |
 | Calibration manuelle des scores d'originalité | ❌ |
 
 ## 📦 Catalogue
@@ -102,6 +102,7 @@
 ---
 
 ## 📜 Journal des itérations
+- **2026-06-13** — Matching V2 **Tranche 3** : migrations 015 (proches onboarding) & 016 (budget), Edge Function `extract-profil`, generate-panel reranke sur la description (anti-goûts) + audace + budget. **Gate qualité passé** (v2 respecte les anti-goûts là où les tags les violent — Marc 0 vs 2, Thomas rétro vs sans-fil). Bascule frontend sur `generate-panel` (+ repli tags) + onboarding (portrait libre/budget/audace). gpt-4o-mini confirmé en prod. **Matching V2 complet.**
 - **2026-06-12** — Matching V2 **Tranche 2** : migrations 013 (proche embedding + config_audace) & 014 (RPC match_produits), Edge Function `generate-panel` (3 couches + portefeuille + justifs gpt-4o), scripts embed-proches & compare-matching. Comparaison tags vs v2 : mécanique v2 validée (cohérente, sur-profil), **non branchée** (le frontend reste sur le matching tags). Secret OpenAI posé sur Supabase.
 - **2026-06-12** — Matching V2 Tranche 1 (pgvector, enrichissement 200/200, HNSW). US-A1→A4 + US-B1→B3 (sprint v3). Création de ce suivi.
 - _(antérieur)_ — MVP cadeau-événement complet : auth (email + Google), proches, swipe, matching tags, propositions, déploiement Vercel.

@@ -23,7 +23,7 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const MODELE_EXTRACT = "gpt-4o"; // évaluation au plafond ; gpt-4o-mini en prod ensuite
+const MODELE_EXTRACT = "gpt-4o-mini"; // prod (plancher) ; gpt-4o servait à l'évaluation
 const MODELE_EMBED = "text-embedding-3-small";
 
 function reponse(corps: unknown, statut = 200): Response {

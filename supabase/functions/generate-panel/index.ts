@@ -26,7 +26,7 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const MODELE_RERANK = "gpt-4o"; // évaluation au plafond (T2) ; gpt-4o-mini en prod ensuite
+const MODELE_RERANK = "gpt-4o-mini"; // prod (plancher) ; gpt-4o servait à l'évaluation
 const NB_DEFAUT = 5;
 
 function reponse(corps: unknown, statut = 200): Response {

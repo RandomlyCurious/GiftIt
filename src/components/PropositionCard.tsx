@@ -17,6 +17,8 @@ type PropositionCardProps = {
   onChoisir?: (produit: Produit, score: number) => void;
   // Désactive le bouton "choisir" pendant un enregistrement en cours.
   enregistrement?: boolean;
+  // Justification incarnée du moteur v2 ("parce qu'elle adore…"), si dispo.
+  justification?: string | null;
 };
 
 // Carte d'un cadeau proposé pour un proche + un événement.
@@ -26,6 +28,7 @@ export function PropositionCard({
   choisie = false,
   onChoisir,
   enregistrement = false,
+  justification = null,
 }: PropositionCardProps) {
   // Le score est une similarité 0–1, on l'affiche en pourcentage.
   const compatibilite = Math.round(Math.max(0, Math.min(1, score)) * 100);
@@ -62,10 +65,16 @@ export function PropositionCard({
           </p>
         </div>
 
-        {produit.description && (
-          <p className="line-clamp-3 text-sm text-muted-foreground">
-            {produit.description}
+        {justification ? (
+          <p className="border-l-2 border-primary/60 pl-3 text-sm italic text-muted-foreground">
+            {justification}
           </p>
+        ) : (
+          produit.description && (
+            <p className="line-clamp-3 text-sm text-muted-foreground">
+              {produit.description}
+            </p>
+          )
         )}
 
         {/* Actions poussées en bas de carte. */}
