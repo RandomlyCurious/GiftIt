@@ -66,7 +66,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
   // 1. Proche : embedding (pont T2 = dérivé des tags) + tags pour le contexte LLM.
   const { data: proche, error: errProche } = await supabase
     .from("proches")
-    .select("id, embedding, proche_tags(tag_slug, tags(libelle))")
+    .select("id, embedding, description_libre, audace, budget_type, budget_min, budget_max, proche_tags(tag_slug, tags(libelle))")
     .eq("id", procheId)
     .maybeSingle();
   if (errProche) return reponse({ error: `Lecture proche : ${errProche.message}` }, 500);
@@ -75,8 +75,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return reponse({ error: "Proche sans embedding — lancer scripts/embed-proches.mjs." }, 422);
   }
 
-  // Audace fixée à 50 (neutre) en Tranche 2 ; le curseur arrive en Tranche 3.
-  const audace = 50;
+  // Audace du proche (curseur T3) ; défaut neutre 50.
+  const audace = proche.audace ?? 50;
   const { data: cfg } = await supabase
     .from("config_audace")
     .select("nb_valeur_sure, nb_equilibre, nb_wildcard")
@@ -85,6 +85,18 @@ Deno.serve(async (req: Request): Promise<Response> => {
     .maybeSingle();
   const repartition = cfg ?? { nb_valeur_sure: 2, nb_equilibre: 2, nb_wildcard: 1 };
 
+  // Budget -> fourchette numérique pour le filtre dur (couche 1).
+  const plafonds: Record<string, number | null> = { "20": 20, "50": 50, "150": 150, nolimit: null };
+  const bt = proche.budget_type ?? "50";
+  let budgetMin: number | null = null;
+  let budgetMax: number | null = null;
+  if (bt === "custom") {
+    budgetMin = proche.budget_min ?? null;
+    budgetMax = proche.budget_max ?? null;
+  } else {
+    budgetMax = plafonds[bt] ?? null;
+  }
+
   // 2. Couches 1+2 (filtres durs + pgvector) via la fonction SQL.
   const embArray =
     typeof proche.embedding === "string" ? JSON.parse(proche.embedding) : proche.embedding;
@@ -92,6 +104,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
     query_embedding: embArray,
     p_proche_id: procheId,
     match_count: 20,
+    p_budget_min: budgetMin,
+    p_budget_max: budgetMax,
   });
   if (errMatch) return reponse({ error: `match_produits : ${errMatch.message}` }, 500);
   if (!candidats || candidats.length === 0) {
@@ -103,6 +117,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
     (proche.proche_tags ?? [])
       .map((pt: { tags?: { libelle?: string }; tag_slug: string }) => pt.tags?.libelle ?? pt.tag_slug)
       .join(", ") || "(aucun tag renseigné)";
+
+  // Profil pour le reranker : la description libre (riche, contient les anti-goûts)
+  // si disponible, sinon les tags. C'est ici que les anti-goûts sont respectés.
+  const profil = proche.description_libre?.trim() || tagsProche;
 
   type Candidat = {
     id: string; nom: string; categorie: string; description_matching: string | null;
@@ -121,10 +139,11 @@ Tu appliques une composition en PORTEFEUILLE à gradient d'originalité :
 - ${repartition.nb_equilibre} "équilibré" : forte pertinence, originalité 3-4 (zone de choix).
 - ${repartition.nb_wildcard} "wildcard" : pertinence correcte mais originalité 4-5 (effet "ah cool !"). Le wildcard garde TOUJOURS un matching décent, jamais hors-sol.
 Tu choisis les produits UNIQUEMENT dans la liste fournie (par leur id). Pour chacun, tu écris une justification courte et incarnée, reliée au profil du proche.
+RÈGLE ABSOLUE : respecte SCRUPULEUSEMENT les anti-goûts et contraintes du profil (ex : "déteste l'électronique" → aucun objet électronique ; "végétarien" → rien à base de viande). Mieux vaut écarter un produit bien noté que violer un anti-goût.
 Réponds en JSON : {"propositions":[{"produit_id": string, "slot": "valeur_sure"|"equilibre"|"wildcard", "justification": string}]} avec EXACTEMENT ${nbPropositions} éléments.`;
 
-  const utilisateur = `Profil du proche (centres d'intérêt) : ${tagsProche}
-Curseur d'audace : ${audace}/100 (neutre)
+  const utilisateur = `Profil du proche : ${profil}
+Curseur d'audace : ${audace}/100
 
 Candidats (${candidats.length}) :
 ${liste}`;

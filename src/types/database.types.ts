@@ -233,45 +233,63 @@ export type Database = {
       proches: {
         Row: {
           adresse: string | null
+          audace: number | null
+          budget_max: number | null
+          budget_min: number | null
+          budget_type: string | null
           calibre: boolean | null
           created_at: string | null
           date_naissance: string
+          description_libre: string | null
           embedding: string | null
           id: string
           nb_swipes: number | null
           nom: string | null
           photo_url: string | null
           prenom: string
+          profil_valide: boolean | null
           relation: string
           user_id: string
           vecteur_gouts: Json | null
         }
         Insert: {
           adresse?: string | null
+          audace?: number | null
+          budget_max?: number | null
+          budget_min?: number | null
+          budget_type?: string | null
           calibre?: boolean | null
           created_at?: string | null
           date_naissance: string
+          description_libre?: string | null
           embedding?: string | null
           id?: string
           nb_swipes?: number | null
           nom?: string | null
           photo_url?: string | null
           prenom: string
+          profil_valide?: boolean | null
           relation: string
           user_id: string
           vecteur_gouts?: Json | null
         }
         Update: {
           adresse?: string | null
+          audace?: number | null
+          budget_max?: number | null
+          budget_min?: number | null
+          budget_type?: string | null
           calibre?: boolean | null
           created_at?: string | null
           date_naissance?: string
+          description_libre?: string | null
           embedding?: string | null
           id?: string
           nb_swipes?: number | null
           nom?: string | null
           photo_url?: string | null
           prenom?: string
+          profil_valide?: boolean | null
           relation?: string
           user_id?: string
           vecteur_gouts?: Json | null
@@ -527,6 +545,24 @@ export type Database = {
     }
     Functions: {
       email_utilisateur: { Args: { uid: string }; Returns: string }
+      match_produits: {
+        Args: {
+          match_count?: number
+          p_proche_id: string
+          query_embedding: string
+        }
+        Returns: {
+          categorie: string
+          description_matching: string
+          distance: number
+          id: string
+          nom: string
+          prix_max: number
+          prix_min: number
+          score_originalite: number
+          url_produit: string
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never

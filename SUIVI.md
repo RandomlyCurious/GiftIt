@@ -67,7 +67,8 @@
 | Fallback tags manuels / vecteur appris | ✅ |
 | **Matching V2 — Tranche 1** (infra pgvector + enrichissement) | ✅ |
 | **Matching V2 — Tranche 2** (moteur `generate-panel` en parallèle + comparaison) | ✅ (construit & comparé, **pas branché**) |
-| Matching V2 — Tranche 3 (onboarding v2, budget, audace, bascule) | ❌ (priorité 1) |
+| Matching V2 — Tranche 3 — backend (extract-profil, budget, description→reranker) | ✅ (construit) |
+| Matching V2 — Tranche 3 — onboarding UI + **bascule** | 🟡 (gate passé, **verdict bascule en attente**) |
 | config_audace / composition portefeuille / justifications | ✅ (via generate-panel) |
 | Calibration manuelle des scores d'originalité | ❌ |
 
