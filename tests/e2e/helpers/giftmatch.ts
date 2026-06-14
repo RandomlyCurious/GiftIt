@@ -8,6 +8,10 @@
 import { type Page, expect } from "@playwright/test";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
+// Fichier de session partagé, produit par le projet `setup` et réutilisé par
+// les projets de test (storageState). Voir playwright.config.ts.
+export const FICHIER_AUTH = "tests/e2e/.auth/user.json";
+
 // --- Variables d'environnement -------------------------------------------
 
 function requireEnv(nom: string): string {
@@ -29,6 +33,9 @@ export const ENV = {
   get supabaseAnonKey() {
     return requireEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
   },
+  get serviceRoleKey() {
+    return requireEnv("SUPABASE_SERVICE_ROLE_KEY");
+  },
   get testUserEmail() {
     return requireEnv("TEST_USER_EMAIL");
   },
@@ -37,39 +44,61 @@ export const ENV = {
   },
 };
 
-// --- Client Supabase authentifié (vérification en base) ------------------
+// --- Client Supabase pour le setup & la vérification en base -------------
 
-// Crée un client supabase-js connecté avec le compte de test. La RLS s'applique
-// donc exactement comme pour l'utilisateur réel : on ne vérifie que ses données.
+// On utilise la SERVICE ROLE pour préparer/lire les données de test : aucun
+// sign-in (le endpoint d'auth est rate-limité), insertions/lectures fiables.
+// La RLS « réelle » reste exercée côté navigateur, qui agit sous la session de
+// l'utilisateur de test. Le user_id des fixtures = l'id du compte de test, donc
+// le navigateur (même utilisateur) voit bien ces données.
+let _userId: string | null = null;
+
 export async function creerClientSupabase(): Promise<{
   sb: SupabaseClient;
   userId: string;
 }> {
-  const sb = createClient(ENV.supabaseUrl, ENV.supabaseAnonKey, {
+  const sb = createClient(ENV.supabaseUrl, ENV.serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
-  const { data, error } = await sb.auth.signInWithPassword({
-    email: ENV.testUserEmail,
-    password: ENV.testUserPassword,
-  });
-  if (error || !data.user) {
-    throw new Error(
-      `Connexion Supabase échouée pour ${ENV.testUserEmail} : ${error?.message}`,
-    );
+
+  // Résout l'id du compte de test une seule fois par worker (via l'API admin,
+  // non soumise au rate-limit du sign-in par mot de passe).
+  if (!_userId) {
+    const { data, error } = await sb.auth.admin.listUsers({ perPage: 1000 });
+    if (error) {
+      throw new Error(`Lecture des utilisateurs (admin) échouée : ${error.message}`);
+    }
+    const cible = ENV.testUserEmail.toLowerCase();
+    const user = data.users.find((u) => u.email?.toLowerCase() === cible);
+    if (!user) {
+      throw new Error(
+        `Compte de test introuvable (${ENV.testUserEmail}). Créez-le dans Supabase Auth.`,
+      );
+    }
+    _userId = user.id;
   }
-  return { sb, userId: data.user.id };
+
+  return { sb, userId: _userId };
 }
 
 // --- Connexion via l'interface (parcours utilisateur réel) ---------------
 
-// Connecte l'utilisateur de test par le formulaire UI et attend l'arrivée sur
-// le dashboard. Sélecteurs alignés sur src/app/auth/login/page.tsx.
+// Garantit une session active sur la page.
+// - Si le contexte est déjà authentifié (storageState réutilisé), /dashboard
+//   reste accessible : on ne refait PAS de login (évite le rate-limit auth).
+// - Sinon, connexion par le formulaire UI (sélecteurs alignés sur
+//   src/app/auth/login/page.tsx). C'est le chemin emprunté par le projet `setup`
+//   et par auth.spec.ts (contexte volontairement non authentifié).
 export async function seConnecter(page: Page): Promise<void> {
+  await page.goto("/dashboard");
+  if (new URL(page.url()).pathname.startsWith("/dashboard")) {
+    return; // déjà connecté via storageState
+  }
   await page.goto("/auth/login");
   await page.locator("#email").fill(ENV.testUserEmail);
   await page.locator("#motDePasse").fill(ENV.testUserPassword);
   await page.getByRole("button", { name: "Se connecter" }).click();
-  await page.waitForURL("**/dashboard");
+  await page.waitForURL("**/dashboard", { timeout: 60_000 });
 }
 
 // --- Fixtures (création / destruction de données de test) ----------------
@@ -120,6 +149,49 @@ export async function creerProcheAvecEvenement(
   }
 
   return { procheId: proche.id, evenementId: ev.id };
+}
+
+// Rattache `nb` centres d'intérêt (tags de référence) au proche. Donne au
+// moteur de matching tags de quoi produire des propositions, même sans swipe
+// ni profil sémantique (cf. CLAUDE.md §4 : avant calibration, on matche sur les
+// tags manuels). Retourne les slugs effectivement rattachés.
+export async function attacherTags(
+  sb: SupabaseClient,
+  procheId: string,
+  nb = 3,
+): Promise<string[]> {
+  const { data: tags, error } = await sb
+    .from("tags")
+    .select("slug")
+    .limit(nb);
+  if (error || !tags || tags.length === 0) {
+    throw new Error(`Aucun tag de référence disponible : ${error?.message}`);
+  }
+  const slugs = tags.map((t) => t.slug);
+  const { error: errLien } = await sb
+    .from("proche_tags")
+    .insert(slugs.map((slug) => ({ proche_id: procheId, tag_slug: slug, poids: 1.0 })));
+  if (errLien) {
+    throw new Error(`Rattachement des tags échoué : ${errLien.message}`);
+  }
+  return slugs;
+}
+
+// Lit une seule colonne d'un proche (helper de vérification en base).
+export async function lireProche<T = Record<string, unknown>>(
+  sb: SupabaseClient,
+  procheId: string,
+  colonnes: string,
+): Promise<T> {
+  const { data, error } = await sb
+    .from("proches")
+    .select(colonnes)
+    .eq("id", procheId)
+    .single();
+  if (error || !data) {
+    throw new Error(`Lecture proche échouée : ${error?.message}`);
+  }
+  return data as T;
 }
 
 // Crée une proposition (cadeau proposé) pour un proche + événement donnés.

@@ -1,7 +1,7 @@
 # SUIVI — État des fonctionnalités GiftMatch
 
 > Source de vérité du périmètre implémenté. **Mis à jour à chaque itération.**
-> Dernière mise à jour : **2026-06-12**
+> Dernière mise à jour : **2026-06-14**
 > Légende : ✅ fait & vérifié · 🟡 partiel · ❌ à faire · 🔒 fondation posée, feature non codée
 
 ---
@@ -88,7 +88,7 @@
 | Tables `declencheurs` + `interactions` (US-B1/B2) | ✅ |
 | Workflows N8n découplés via declencheurs (US-B3) + RPC e-mail | ✅ (fichiers) |
 | Déploiement Vercel (auto-deploy GitHub) | ✅ |
-| QA Playwright | 🟡 (setup en place) |
+| QA Playwright (e2e) | ✅ suite 32/32 verte (desktop + mobile) ; points QA non bloquants traités |
 
 ## 🚀 Roadmap / business (non commencé)
 | Fonctionnalité | État |
@@ -102,6 +102,7 @@
 ---
 
 ## 📜 Journal des itérations
+- **2026-06-14** — Prise en compte du rapport QA (tests/e2e/RAPPORT_QA.md) : 2.1 FrequenceEvenement sérialisé (select désactivé pendant l'écriture), 2.2 MAJ optimistes avec rollback + message (HistoriquePropositionItem), 2.3 sharp installé. 2.4 (confirmation e-mail) = décision de config en attente.
 - **2026-06-14** — US-03 : modifier (page /proches/[id]/modifier, tous champs + re-extract-profil si portrait changé) & supprimer un proche (modale + cascade vérifiée). lib/proches.ts, composant ProcheActions.
 - **2026-06-14** — Fix UX : la 1ère session de swipe était non personnalisée (15 produits par id = high-tech). Edge Function `generate-swipe-cards` (compo v2 §3 : cœur de cible / discriminante / exploratoire via embedding) ; page swipe branchée dessus. Cartes désormais pertinentes au profil. Swipe reste optionnel (skippable via retour fiche).
 - **2026-06-13** — Matching V2 **Tranche 3** : migrations 015 (proches onboarding) & 016 (budget), Edge Function `extract-profil`, generate-panel reranke sur la description (anti-goûts) + audace + budget. **Gate qualité passé** (v2 respecte les anti-goûts là où les tags les violent — Marc 0 vs 2, Thomas rétro vs sans-fil). Bascule frontend sur `generate-panel` (+ repli tags) + onboarding (portrait libre/budget/audace). gpt-4o-mini confirmé en prod. **Matching V2 complet.**

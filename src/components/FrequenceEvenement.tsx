@@ -39,7 +39,8 @@ export function FrequenceEvenement({
         <select
           value={valeur}
           onChange={handleChange}
-          className="rounded-md border border-input bg-background px-2 py-1 text-sm"
+          disabled={etat === "saving"}
+          className="rounded-md border border-input bg-background px-2 py-1 text-sm disabled:opacity-60"
         >
           {FREQUENCES.map((f) => (
             <option key={f.code} value={f.code}>

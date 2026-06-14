@@ -30,16 +30,30 @@ export function HistoriquePropositionItem(props: HistoriqueItemProps) {
   const [satisfaction, setSatisfaction] = useState<number | null>(
     props.satisfactionInitiale,
   );
+  const [erreur, setErreur] = useState(false);
 
+  // MAJ optimiste avec rollback : si la persistance échoue, on restaure l'état
+  // précédent et on affiche un message (évite la divergence UI/base, QA 2.2).
   async function toggleOffert() {
-    const suivant = !offert;
-    setOffert(suivant);
-    await marquerOffert(props.id, suivant);
+    const precedent = offert;
+    setOffert(!precedent);
+    setErreur(false);
+    const ok = await marquerOffert(props.id, !precedent);
+    if (!ok) {
+      setOffert(precedent);
+      setErreur(true);
+    }
   }
 
   async function noter(niveau: 1 | 2 | 3) {
+    const precedent = satisfaction;
     setSatisfaction(niveau);
-    await enregistrerSatisfaction(props.id, niveau);
+    setErreur(false);
+    const ok = await enregistrerSatisfaction(props.id, niveau);
+    if (!ok) {
+      setSatisfaction(precedent);
+      setErreur(true);
+    }
   }
 
   return (
@@ -85,6 +99,10 @@ export function HistoriquePropositionItem(props: HistoriqueItemProps) {
             </button>
           ))}
         </div>
+
+        {erreur && (
+          <span className="text-xs text-destructive">Échec, réessayez.</span>
+        )}
       </div>
     </div>
   );
