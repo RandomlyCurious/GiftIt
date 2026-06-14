@@ -21,7 +21,7 @@
 | Création auto du profil (trigger, email + Google) | ✅ |
 | Déconnexion | ✅ |
 | Protection des routes (middleware) | ✅ |
-| Vérification e-mail obligatoire | 🟡 (géré en code, config non vérifiée) |
+| Confirmation e-mail à l'inscription | ❌ **désactivée** (choix produit : friction zéro) — toggle dashboard à confirmer |
 | Récupération de mot de passe | ❌ |
 | OAuth Apple | ❌ |
 | Profil : langue, fuseau, avatar | ❌ |
@@ -102,6 +102,7 @@
 ---
 
 ## 📜 Journal des itérations
+- **2026-06-14** — QA 2.4 tranché : **pas de confirmation e-mail** à l'inscription (choix produit). Réglage = toggle Supabase « Confirm email » OFF (dashboard) ; le code gère déjà la session immédiate (aucun changement).
 - **2026-06-14** — Prise en compte du rapport QA (tests/e2e/RAPPORT_QA.md) : 2.1 FrequenceEvenement sérialisé (select désactivé pendant l'écriture), 2.2 MAJ optimistes avec rollback + message (HistoriquePropositionItem), 2.3 sharp installé. 2.4 (confirmation e-mail) = décision de config en attente.
 - **2026-06-14** — US-03 : modifier (page /proches/[id]/modifier, tous champs + re-extract-profil si portrait changé) & supprimer un proche (modale + cascade vérifiée). lib/proches.ts, composant ProcheActions.
 - **2026-06-14** — Fix UX : la 1ère session de swipe était non personnalisée (15 produits par id = high-tech). Edge Function `generate-swipe-cards` (compo v2 §3 : cœur de cible / discriminante / exploratoire via embedding) ; page swipe branchée dessus. Cartes désormais pertinentes au profil. Swipe reste optionnel (skippable via retour fiche).
