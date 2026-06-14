@@ -353,7 +353,6 @@ export type Database = {
           prix_min: number | null
           score_originalite: number | null
           source: string | null
-          tranche_age: string | null
           url_image: string | null
           url_produit: string
         }
@@ -375,7 +374,6 @@ export type Database = {
           prix_min?: number | null
           score_originalite?: number | null
           source?: string | null
-          tranche_age?: string | null
           url_image?: string | null
           url_produit: string
         }
@@ -397,7 +395,6 @@ export type Database = {
           prix_min?: number | null
           score_originalite?: number | null
           source?: string | null
-          tranche_age?: string | null
           url_image?: string | null
           url_produit?: string
         }

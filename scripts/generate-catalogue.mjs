@@ -65,13 +65,14 @@ Chaque concept (varie-les fortement entre eux, évite les redites) :
 - "nom" : un cadeau CONCRET et IDENTIFIABLE qu'on pourrait trouver chez un marchand (ex : "Roman d'aventure best-seller", "Box mensuelle de thés et biscuits artisanaux", "Casque audio à réduction de bruit", "Cours de poterie en duo"). JAMAIS un concept abstrait ou vague (INTERDIT : "Souvenir musical", "Box douceur", "Lumière apaisante", "Cahier d'exercices") — nomme précisément l'objet ou l'activité. DISTINCT des autres.
 - "prix_min","prix_max" : fourchette plausible € (entiers, min<max). IMPÉRATIF de gamme : vise ~30% de PETITS cadeaux à prix_max ≤ 20€ (consommables, accessoires, livres, petits objets), ~40% entre 20-50€, ~20% entre 50-150€, ~10% > 150€ uniquement si la catégorie s'y prête (expériences, high-tech premium). Ne concentre PAS tout sur 40-150€.
 - "score_originalite" : entier 1-5 selon l'échelle ancrée ci-dessous.
-- "tranche_age", "occasions" (tableau court).
+- "age_min","age_max" : entiers 0-99 délimitant l'âge du destinataire (ex enfant 3/12, ado 12/17, jeune adulte 18/30, adulte 18/99, tous publics 0/99). min ≤ max.
+- "occasions" (tableau court).
 - "tags" : 1 à 4 slugs SPÉCIFIQUES de cette liste fermée : ${SLUGS.join(", ")}. Chaque tag doit décrire un ATTRIBUT RÉEL du produit ou de son destinataire — aucun tag hors-sujet (ex : ne tague pas 'jardinage' une assiette de randonnée). ÉVITE 'autre' ; si aucun tag pertinent, mets []. N'invente aucun slug.
 - "description_matching" : phrases sur LE DESTINATAIRE IDÉAL (personnalité, goûts, moments de vie), JAMAIS le produit. VARIE la LONGUEUR (certaines en 2 phrases, d'autres en 3-4 plus riches et incarnées) ET la structure. Ne commence JAMAIS par "Idéal pour"/"Parfait pour"/"Ce cadeau". Évite les formules récurrentes type "amateur de X qui aime expérimenter" : chaque description doit être singulière, concrète, ancrée dans des situations de vie précises.
 
 ${ANCRES}
 
-Réponds en JSON sous la clé "concepts" : un tableau de ${n} objets {nom, prix_min, prix_max, score_originalite, tranche_age, occasions, tags, description_matching}.`;
+Réponds en JSON sous la clé "concepts" : un tableau de ${n} objets {nom, prix_min, prix_max, score_originalite, age_min, age_max, occasions, tags, description_matching}.`;
 }
 
 function bucketPrix(c) { const p = (Number(c.prix_min) + Number(c.prix_max)) / 2; return p < 20 ? "<20" : p <= 50 ? "20-50" : p <= 150 ? "50-150" : ">150"; }
@@ -108,9 +109,11 @@ for (const { cat, n } of PLAN) {
       // accepté
       refsNom.push(tk); refsVec.push(vec);
       const tagsValides = (c.tags || []).filter((t) => SLUGS.includes(t) && t !== "autre");
-      const rec = { cat, nom: c.nom, prix_min: c.prix_min, prix_max: c.prix_max, score_originalite: c.score_originalite, tranche_age: c.tranche_age ?? null, occasions: c.occasions ?? [], tags: tagsValides, description_matching: c.description_matching, vec };
+      const ageMin = Number.isInteger(c.age_min) ? Math.max(0, Math.min(99, c.age_min)) : 0;
+      const ageMax = Number.isInteger(c.age_max) ? Math.max(ageMin, Math.min(99, c.age_max)) : 99;
+      const rec = { cat, nom: c.nom, prix_min: c.prix_min, prix_max: c.prix_max, score_originalite: c.score_originalite, age_min: ageMin, age_max: ageMax, occasions: c.occasions ?? [], tags: tagsValides, description_matching: c.description_matching, vec };
       if (!DRY) {
-        const [prod] = await sbPost("produits", [{ nom: rec.nom, categorie: cat, description: null, prix_min: rec.prix_min, prix_max: rec.prix_max, url_produit: `https://www.google.com/search?q=${encodeURIComponent(rec.nom + " cadeau")}`, url_image: null, affilie: false, actif: true, nb_tags: tagsValides.length, description_matching: rec.description_matching, embedding: `[${vec.join(",")}]`, score_originalite: rec.score_originalite, tranche_age: rec.tranche_age, occasions: rec.occasions, source: "genere_test" }]);
+        const [prod] = await sbPost("produits", [{ nom: rec.nom, categorie: cat, description: null, prix_min: rec.prix_min, prix_max: rec.prix_max, url_produit: `https://www.google.com/search?q=${encodeURIComponent(rec.nom + " cadeau")}`, url_image: null, affilie: false, actif: true, nb_tags: tagsValides.length, description_matching: rec.description_matching, embedding: `[${vec.join(",")}]`, score_originalite: rec.score_originalite, age_min: rec.age_min, age_max: rec.age_max, occasions: rec.occasions, source: "genere_test" }]);
         if (tagsValides.length) await sbPost("produit_tags", tagsValides.map((tag_slug) => ({ produit_id: prod.id, tag_slug })));
         insered++; process.stdout.write(`\r  inséré ${insered}`);
         if (insered % 200 === 0) recap("@" + insered);

@@ -78,9 +78,9 @@ RÈGLES DE FORMULATION (cruciales — ces textes seront vectorisés) :
 
 Tu fournis aussi :
 - score_originalite (entier 1-5) : 1=très commun (bougie, coffret chocolat), 3=original accessible (box spécialisée), 5=très original (cours de forge, baptême en planeur).
-- tranche_age : "enfant"|"ado"|"jeune adulte"|"adulte"|"senior"|"tous" ou null.
+- age_min, age_max : entiers 0-99 délimitant l'âge du destinataire (enfant 3/12, ado 12/17, jeune adulte 18/30, adulte 18/99, tous 0/99). min ≤ max.
 - occasions : tableau court de mots-clés (ex ["anniversaire","noel"]) ou [].
-Réponds UNIQUEMENT en JSON : {"description_matching": string, "score_originalite": number, "tranche_age": string|null, "occasions": string[]}.`;
+Réponds UNIQUEMENT en JSON : {"description_matching": string, "score_originalite": number, "age_min": number, "age_max": number, "occasions": string[]}.`;
 
 async function sbGet(query) {
   const r = await fetch(`${SUPABASE_URL}/rest/v1/${query}`, {
@@ -164,12 +164,15 @@ for (const [i, p] of produits.entries()) {
       console.log(`[${i + 1}/${produits.length}] ${p.nom}  (${p.categorie}, ${p.prix_min}-${p.prix_max}€)`);
       console.log(`  angle: ${angle}`);
       console.log(`  → ${obj.description_matching}`);
-      console.log(`  → orig: ${obj.score_originalite} | age: ${obj.tranche_age} | occasions: ${JSON.stringify(obj.occasions)} | embedding: vector(${vecteur.length})\n`);
+      console.log(`  → orig: ${obj.score_originalite} | age: ${obj.age_min}-${obj.age_max} | occasions: ${JSON.stringify(obj.occasions)} | embedding: vector(${vecteur.length})\n`);
     } else {
+      const ageMin = Number.isInteger(obj.age_min) ? Math.max(0, Math.min(99, obj.age_min)) : 0;
+      const ageMax = Number.isInteger(obj.age_max) ? Math.max(ageMin, Math.min(99, obj.age_max)) : 99;
       await sbPatch(p.id, {
         description_matching: obj.description_matching,
         score_originalite: obj.score_originalite,
-        tranche_age: obj.tranche_age,
+        age_min: ageMin,
+        age_max: ageMax,
         occasions: obj.occasions,
         embedding: `[${vecteur.join(",")}]`,
       });

@@ -77,7 +77,7 @@
 |---|---|
 | 48 tags + **1200 produits** (200 curés + 1000 concepts `genere_test` pour dev/test matching) | ✅ |
 | Enrichissement v2 (description_matching, embedding, score, attributs) — **1200/1200, 0 embedding null** | ✅ |
-| Âge normalisé : `age_min`/`age_max` numériques (migration 018, filtre dur futur) — 1200/1200 | ✅ |
+| Âge normalisé : `age_min`/`age_max` numériques (migrations 018+019, ancien `tranche_age` supprimé) — 1200/1200 | ✅ |
 | Cohérence catégories (passe LLM + correctif aliments/boissons) — `autre` à 2.7 % | ✅ |
 | pgvector + index HNSW | ✅ |
 | Tracking liens affiliés | ❌ |
@@ -104,7 +104,8 @@
 ---
 
 ## 📜 Journal des itérations
-- **2026-06-14** — Nettoyage catalogue (3 points) : (1) `tranche_age` normalisé en `age_min`/`age_max` numériques (migration 018 additive, champ texte conservé ; scripts/normalize-age.mjs paginé sur 1200) ; (2) passe de cohérence catégorie (scripts/fix-categories.mjs, revue LLM par lots) — sur-réaction corrigée par scripts/fix-cat-correctif.mjs (7 vins/bières/chocolats remis en gastronomie) ; (3) récaps finaux. Distribution finale : catégories équilibrées (gastro 14.7 % → autre 2.7 %), prix 27/53/17/3 % (<20/20-50/50-150/>150), originalité en cloche centrée sur 3, âge 1200/1200 rempli.
+- **2026-06-14** — `tranche_age` (texte chaotique) **supprimé** (migration 019) après normalisation : source d'âge unique = `age_min`/`age_max`. Scripts de génération (generate-catalogue, enrich-catalogue) mis à jour pour produire directement age_min/age_max.
+- **2026-06-14** — Nettoyage catalogue (3 points) : (1) `tranche_age` normalisé en `age_min`/`age_max` numériques (migration 018 additive ; scripts/normalize-age.mjs paginé sur 1200) ; (2) passe de cohérence catégorie (scripts/fix-categories.mjs, revue LLM par lots) — sur-réaction corrigée par scripts/fix-cat-correctif.mjs (7 vins/bières/chocolats remis en gastronomie) ; (3) récaps finaux. Distribution finale : catégories équilibrées (gastro 14.7 % → autre 2.7 %), prix 27/53/17/3 % (<20/20-50/50-150/>150), originalité en cloche centrée sur 3, âge 1200/1200 rempli.
 - **2026-06-14** — Catalogue étendu à **1200** (migration 017 colonne `source`; 1000 concepts `genere_test` générés via scripts/generate-catalogue.mjs : noms concrets, dédup nom+embedding>0.92, scores ancrés 1-5, descriptions variées, URLs=recherche). 0 embedding null. experiences saturée (rejet ~51%) plafonnée à 80.
 - **2026-06-14** — QA 2.4 tranché : **pas de confirmation e-mail** à l'inscription (choix produit). Réglage = toggle Supabase « Confirm email » OFF (dashboard) ; le code gère déjà la session immédiate (aucun changement).
 - **2026-06-14** — Prise en compte du rapport QA (tests/e2e/RAPPORT_QA.md) : 2.1 FrequenceEvenement sérialisé (select désactivé pendant l'écriture), 2.2 MAJ optimistes avec rollback + message (HistoriquePropositionItem), 2.3 sharp installé. 2.4 (confirmation e-mail) = décision de config en attente.
