@@ -9,7 +9,7 @@
 ## 🎯 Priorités en cours (ordre demandé)
 
 1. ~~Matching V2 — tous les points (Tranches 1-2-3)~~ — ✅ **TERMINÉ** (v2 branché, repli tags)
-2. **Modifier / supprimer un proche** — _prochaine priorité_
+2. ~~Modifier / supprimer un proche~~ — ✅ **TERMINÉ**
 
 ---
 
@@ -32,8 +32,8 @@
 | Ajout d'un proche (champs + tags + événements) | ✅ |
 | Liste (dashboard, tri par prochain événement) | ✅ |
 | Fiche détaillée | ✅ |
-| **Modifier un proche** | ❌ (priorité 2) |
-| **Supprimer un proche** | ❌ (priorité 2) |
+| **Modifier un proche** (tous champs + portrait/budget/audace) | ✅ |
+| **Supprimer un proche** (modale + cascade) | ✅ |
 | Upload photo (Storage) | ❌ |
 | Tags libres (hors liste) | ❌ |
 
@@ -102,6 +102,7 @@
 ---
 
 ## 📜 Journal des itérations
+- **2026-06-14** — US-03 : modifier (page /proches/[id]/modifier, tous champs + re-extract-profil si portrait changé) & supprimer un proche (modale + cascade vérifiée). lib/proches.ts, composant ProcheActions.
 - **2026-06-14** — Fix UX : la 1ère session de swipe était non personnalisée (15 produits par id = high-tech). Edge Function `generate-swipe-cards` (compo v2 §3 : cœur de cible / discriminante / exploratoire via embedding) ; page swipe branchée dessus. Cartes désormais pertinentes au profil. Swipe reste optionnel (skippable via retour fiche).
 - **2026-06-13** — Matching V2 **Tranche 3** : migrations 015 (proches onboarding) & 016 (budget), Edge Function `extract-profil`, generate-panel reranke sur la description (anti-goûts) + audace + budget. **Gate qualité passé** (v2 respecte les anti-goûts là où les tags les violent — Marc 0 vs 2, Thomas rétro vs sans-fil). Bascule frontend sur `generate-panel` (+ repli tags) + onboarding (portrait libre/budget/audace). gpt-4o-mini confirmé en prod. **Matching V2 complet.**
 - **2026-06-12** — Matching V2 **Tranche 2** : migrations 013 (proche embedding + config_audace) & 014 (RPC match_produits), Edge Function `generate-panel` (3 couches + portefeuille + justifs gpt-4o), scripts embed-proches & compare-matching. Comparaison tags vs v2 : mécanique v2 validée (cohérente, sur-profil), **non branchée** (le frontend reste sur le matching tags). Secret OpenAI posé sur Supabase.

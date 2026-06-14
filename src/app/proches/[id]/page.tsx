@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/card";
 import { prochaineDateEvenement, libelleEvenement } from "@/lib/evenements";
 import { FrequenceEvenement } from "@/components/FrequenceEvenement";
+import { ProcheActions } from "@/components/ProcheActions";
 
 const LIBELLE_RELATION: Record<string, string> = {
   conjoint: "Conjoint·e",
@@ -97,6 +98,11 @@ export default async function FicheProchePage({
             Calibré
           </span>
         )}
+      </div>
+
+      {/* Actions : modifier / supprimer (US-03) */}
+      <div className="mb-6">
+        <ProcheActions procheId={proche.id} prenom={proche.prenom} />
       </div>
 
       {/* Calibration */}
