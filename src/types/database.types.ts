@@ -338,6 +338,8 @@ export type Database = {
         Row: {
           actif: boolean | null
           affilie: boolean | null
+          age_max: number | null
+          age_min: number | null
           categorie: string
           created_at: string | null
           description: string | null
@@ -358,6 +360,8 @@ export type Database = {
         Insert: {
           actif?: boolean | null
           affilie?: boolean | null
+          age_max?: number | null
+          age_min?: number | null
           categorie: string
           created_at?: string | null
           description?: string | null
@@ -378,6 +382,8 @@ export type Database = {
         Update: {
           actif?: boolean | null
           affilie?: boolean | null
+          age_max?: number | null
+          age_min?: number | null
           categorie?: string
           created_at?: string | null
           description?: string | null
