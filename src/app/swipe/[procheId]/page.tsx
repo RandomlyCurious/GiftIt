@@ -15,9 +15,6 @@ type Produit = Database["public"]["Tables"]["produits"]["Row"];
 // Produit enrichi de la liste des slugs de ses tags.
 type ProduitAvecTags = Produit & { tags: string[] };
 
-// Nombre de produits chargés par session (CdC §3.3.1).
-const TAILLE_PILE = 15;
-
 export default function SwipePage() {
   const params = useParams<{ procheId: string }>();
   const procheId = params.procheId;
@@ -48,45 +45,46 @@ export default function SwipePage() {
       }
       setNbSwipes(proche?.nb_swipes ?? 0);
 
-      // Produits déjà swipés par ce proche, à exclure.
-      const { data: dejaSwipes, error: erreurSwipes } = await supabase
-        .from("swipes")
-        .select("produit_id")
-        .eq("proche_id", procheId);
-      if (erreurSwipes) {
-        console.error(erreurSwipes);
-        setErreur("Impossible de charger l'historique des swipes.");
+      // Cartes PERTINENTES pour ce proche (embedding + repli) via l'Edge Function.
+      // Elle exclut déjà les produits swipés et ordonne par pertinence.
+      const { data: cartes, error: errCartes } = await supabase.functions.invoke<{
+        produit_ids: string[];
+      }>("generate-swipe-cards", {
+        body: { proche_id: procheId },
+      });
+      if (errCartes) {
+        console.error(errCartes);
+        setErreur("Impossible de charger les idées à swiper.");
         setChargement(false);
         return;
       }
-      const idsExclus = (dejaSwipes ?? []).map((s) => s.produit_id);
-
-      // Produits actifs avec leurs tags, hors produits déjà swipés.
-      let requete = supabase
-        .from("produits")
-        .select("*, produit_tags(tag_slug)")
-        .eq("actif", true)
-        .limit(TAILLE_PILE);
-      if (idsExclus.length > 0) {
-        requete = requete.not("id", "in", `(${idsExclus.join(",")})`);
+      const idsOrdonnes = cartes?.produit_ids ?? [];
+      if (idsOrdonnes.length === 0) {
+        setPile([]);
+        setIndexCourant(0);
+        setChargement(false);
+        return;
       }
 
-      const { data: produits, error: erreurProduits } = await requete;
+      // Détails + tags, en préservant l'ordre de pertinence renvoyé.
+      const { data: produits, error: erreurProduits } = await supabase
+        .from("produits")
+        .select("*, produit_tags(tag_slug)")
+        .in("id", idsOrdonnes);
       if (erreurProduits) {
         console.error(erreurProduits);
         setErreur("Impossible de charger les produits.");
         setChargement(false);
         return;
       }
-
-      // On aplatit les tags de chaque produit en simple tableau de slugs.
-      const pileEnrichie: ProduitAvecTags[] = (produits ?? []).map((p) => {
-        const { produit_tags, ...produit } = p;
-        return {
-          ...produit,
-          tags: (produit_tags ?? []).map((t) => t.tag_slug),
-        };
-      });
+      const parId = new Map((produits ?? []).map((p) => [p.id, p]));
+      const pileEnrichie: ProduitAvecTags[] = idsOrdonnes
+        .map((id) => parId.get(id))
+        .filter((p): p is NonNullable<typeof p> => Boolean(p))
+        .map((p) => {
+          const { produit_tags, ...produit } = p;
+          return { ...produit, tags: (produit_tags ?? []).map((t) => t.tag_slug) };
+        });
 
       setPile(pileEnrichie);
       setIndexCourant(0);

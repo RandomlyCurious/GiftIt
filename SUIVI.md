@@ -40,7 +40,7 @@
 ## 🎯 Découverte / Calibration
 | Fonctionnalité | État |
 |---|---|
-| Session de swipe (exclut déjà-swipés) | ✅ |
+| Session de swipe **personnalisée** (generate-swipe-cards : cœur/discriminante/exploratoire §3) | ✅ |
 | MAJ vecteur de goûts (+0.5/−0.3, plancher 0) | ✅ |
 | Seuil calibration (≥5) + barre de progression | ✅ |
 | Re-calibration | ✅ |
@@ -102,6 +102,7 @@
 ---
 
 ## 📜 Journal des itérations
+- **2026-06-14** — Fix UX : la 1ère session de swipe était non personnalisée (15 produits par id = high-tech). Edge Function `generate-swipe-cards` (compo v2 §3 : cœur de cible / discriminante / exploratoire via embedding) ; page swipe branchée dessus. Cartes désormais pertinentes au profil. Swipe reste optionnel (skippable via retour fiche).
 - **2026-06-13** — Matching V2 **Tranche 3** : migrations 015 (proches onboarding) & 016 (budget), Edge Function `extract-profil`, generate-panel reranke sur la description (anti-goûts) + audace + budget. **Gate qualité passé** (v2 respecte les anti-goûts là où les tags les violent — Marc 0 vs 2, Thomas rétro vs sans-fil). Bascule frontend sur `generate-panel` (+ repli tags) + onboarding (portrait libre/budget/audace). gpt-4o-mini confirmé en prod. **Matching V2 complet.**
 - **2026-06-12** — Matching V2 **Tranche 2** : migrations 013 (proche embedding + config_audace) & 014 (RPC match_produits), Edge Function `generate-panel` (3 couches + portefeuille + justifs gpt-4o), scripts embed-proches & compare-matching. Comparaison tags vs v2 : mécanique v2 validée (cohérente, sur-profil), **non branchée** (le frontend reste sur le matching tags). Secret OpenAI posé sur Supabase.
 - **2026-06-12** — Matching V2 Tranche 1 (pgvector, enrichissement 200/200, HNSW). US-A1→A4 + US-B1→B3 (sprint v3). Création de ce suivi.
