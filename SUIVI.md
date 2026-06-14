@@ -75,8 +75,8 @@
 ## 📦 Catalogue
 | Fonctionnalité | État |
 |---|---|
-| 48 tags + 200 produits | ✅ |
-| Enrichissement v2 (description_matching, embedding, score, attributs) — 200/200 | ✅ |
+| 48 tags + **1200 produits** (200 curés + 1000 concepts `genere_test` pour dev/test matching) | ✅ |
+| Enrichissement v2 (description_matching, embedding, score, attributs) — **1200/1200, 0 embedding null** | ✅ |
 | pgvector + index HNSW | ✅ |
 | Tracking liens affiliés | ❌ |
 | Intégration API marchandes (Phase 2) | ❌ |
@@ -102,6 +102,7 @@
 ---
 
 ## 📜 Journal des itérations
+- **2026-06-14** — Catalogue étendu à **1200** (migration 017 colonne `source`; 1000 concepts `genere_test` générés via scripts/generate-catalogue.mjs : noms concrets, dédup nom+embedding>0.92, scores ancrés 1-5, descriptions variées, URLs=recherche). 0 embedding null. experiences saturée (rejet ~51%) plafonnée à 80.
 - **2026-06-14** — QA 2.4 tranché : **pas de confirmation e-mail** à l'inscription (choix produit). Réglage = toggle Supabase « Confirm email » OFF (dashboard) ; le code gère déjà la session immédiate (aucun changement).
 - **2026-06-14** — Prise en compte du rapport QA (tests/e2e/RAPPORT_QA.md) : 2.1 FrequenceEvenement sérialisé (select désactivé pendant l'écriture), 2.2 MAJ optimistes avec rollback + message (HistoriquePropositionItem), 2.3 sharp installé. 2.4 (confirmation e-mail) = décision de config en attente.
 - **2026-06-14** — US-03 : modifier (page /proches/[id]/modifier, tous champs + re-extract-profil si portrait changé) & supprimer un proche (modale + cascade vérifiée). lib/proches.ts, composant ProcheActions.

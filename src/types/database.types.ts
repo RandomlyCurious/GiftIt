@@ -350,6 +350,7 @@ export type Database = {
           prix_max: number | null
           prix_min: number | null
           score_originalite: number | null
+          source: string | null
           tranche_age: string | null
           url_image: string | null
           url_produit: string
@@ -369,6 +370,7 @@ export type Database = {
           prix_max?: number | null
           prix_min?: number | null
           score_originalite?: number | null
+          source?: string | null
           tranche_age?: string | null
           url_image?: string | null
           url_produit: string
@@ -388,6 +390,7 @@ export type Database = {
           prix_max?: number | null
           prix_min?: number | null
           score_originalite?: number | null
+          source?: string | null
           tranche_age?: string | null
           url_image?: string | null
           url_produit?: string
@@ -548,6 +551,8 @@ export type Database = {
       match_produits: {
         Args: {
           match_count?: number
+          p_budget_max?: number
+          p_budget_min?: number
           p_proche_id: string
           query_embedding: string
         }
